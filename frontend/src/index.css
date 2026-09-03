@@ -1,0 +1,198 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Fraunces", "Georgia", serif;
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
+
+  /* Pasture — primary brand, grass/field, not stock SaaS green */
+  --color-pasture-950: #131d0d;
+  --color-pasture-800: #23361a;
+  --color-pasture-700: #304a24;
+  --color-pasture-600: #45632f;
+  --color-pasture-500: #5a7a3f;
+  --color-pasture-400: #7d9c62;
+  --color-pasture-200: #cddabb;
+  --color-pasture-300: #b3c99a;
+  --color-pasture-100: #e3ead6;
+  --color-pasture-50: #f4f7ef;
+
+  /* Hide — tan/soil, farmer-context warmth */
+  --color-hide-700: #6b4420;
+  --color-hide-600: #8a5b28;
+  --color-hide-500: #b5793a;
+  --color-hide-300: #dcb47f;
+  --color-hide-200: #ead3b0;
+  --color-hide-100: #f3e6cf;
+
+  /* Mist — warm off-white surfaces, not stock gray */
+  --color-mist-50: #f8f7f2;
+  --color-mist-100: #f1efe6;
+  --color-mist-200: #e6e2d3;
+  --color-mist-300: #d4cdb8;
+
+  /* Ink — text, warmer than pure slate */
+  --color-ink-900: #201c14;
+  --color-ink-800: #2f2a20;
+  --color-ink-700: #423c2e;
+  --color-ink-600: #554d3c;
+  --color-ink-500: #6b6250;
+  --color-ink-400: #8d8471;
+  --color-ink-300: #b0a892;
+
+  /* Vital — emergency/blood, brick not stock red */
+  --color-vital-700: #7a2618;
+  --color-vital-600: #a3391f;
+  --color-vital-500: #c1442d;
+  --color-vital-300: #e0a698;
+  --color-vital-200: #ecc3ba;
+  --color-vital-100: #f5ded6;
+  --color-vital-50: #fbf1ee;
+
+  /* Amber-alert — urgent/ochre, not stock amber */
+  --color-amber-alert-800: #6e4610;
+  --color-amber-alert-700: #8f5c14;
+  --color-amber-alert-600: #b8791e;
+  --color-amber-alert-500: #cf8f2f;
+  --color-amber-alert-200: #ecd39d;
+  --color-amber-alert-100: #f5e6c8;
+  --color-amber-alert-50: #fbf3e3;
+
+  /* Serum — chemistry/treatment teal-blue */
+  --color-serum-700: #1f3d4d;
+  --color-serum-600: #2c5468;
+  --color-serum-500: #3e6e8e;
+  --color-serum-100: #dbe8ee;
+  --color-serum-50: #eef4f7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-ink-900);
+  background-color: var(--color-mist-50);
+}
+
+/* Visible keyboard focus everywhere — accessibility floor, not decoration */
+:focus-visible {
+  outline: 2px solid var(--color-pasture-600);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-lg border border-mist-300 bg-white px-3 py-2.5 text-sm text-ink-900 placeholder:text-ink-400 focus:border-pasture-500 focus:outline-none focus:ring-1 focus:ring-pasture-500;
+  }
+
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-data {
+    font-family: var(--font-mono);
+    letter-spacing: 0.02em;
+  }
+
+  /* Cards lift slightly on hover/press - makes the whole app feel more tactile */
+  .hover-lift {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px -6px rgb(32 28 20 / 0.12);
+  }
+  .hover-lift:active {
+    transform: translateY(0);
+  }
+
+  /* Colored glow shadows, tinted to each semantic color - used sparingly
+     on primary CTAs and the emergency badge, not everywhere. */
+  .glow-pasture {
+    box-shadow: 0 6px 18px -4px rgb(69 99 47 / 0.4);
+  }
+  .glow-vital {
+    box-shadow: 0 6px 18px -4px rgb(193 68 45 / 0.4);
+  }
+  .glow-serum {
+    box-shadow: 0 6px 18px -4px rgb(62 110 142 / 0.35);
+  }
+
+  /* Gradient primary button with press feedback */
+  .btn-pop {
+    @apply rounded-lg bg-gradient-to-b from-pasture-500 to-pasture-700 font-semibold text-white transition-all duration-150;
+    box-shadow: 0 4px 14px -3px rgb(69 99 47 / 0.45);
+  }
+  .btn-pop:hover {
+    box-shadow: 0 6px 20px -3px rgb(69 99 47 / 0.55);
+    transform: translateY(-1px);
+  }
+  .btn-pop:active {
+    transform: translateY(0.5px) scale(0.98);
+  }
+  .btn-pop:disabled {
+    opacity: 0.6;
+    box-shadow: none;
+    transform: none;
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgb(193 68 45 / 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgb(193 68 45 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(193 68 45 / 0);
+  }
+}
+
+.animate-pulse-emergency {
+  animation: pulse-ring 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes count-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-count-in {
+  animation: count-in 0.4s ease-out;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f1efe6 25%, #e6e2d3 37%, #f1efe6 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
