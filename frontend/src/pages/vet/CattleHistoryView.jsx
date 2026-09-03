@@ -69,36 +69,108 @@ export default function CattleHistoryView() {
                     <Icon size={13} />
                   </span>
                   <div className="rounded-xl border border-mist-200 bg-white p-4 shadow-sm">
-                    <div className="mb-1 flex items-center justify-between">
+                    <div className="mb-2 flex items-center justify-between">
                       <p className="text-xs font-medium uppercase tracking-wide text-ink-500">
                         {event.eventType.replace('_', ' ')}
                       </p>
-                      <p className="text-xs text-ink-400">
-                        {new Date(event.eventDate).toLocaleDateString()}
+                      <p className="font-data text-xs text-ink-400">
+                        {new Date(event.eventDate).toLocaleDateString(undefined, {
+                          day: '2-digit', month: 'short', year: 'numeric',
+                        })}
                       </p>
                     </div>
-                    {event.clinicalAssessment && (
-                      <p className="mb-1 text-sm text-ink-600">
-                        <span className="font-medium">Diagnosis:</span> {event.clinicalAssessment}
-                      </p>
-                    )}
-                    {event.treatment?.performed && (
-                      <p className="mb-1 text-sm text-ink-600">
-                        <span className="font-medium">Treatment:</span> {event.treatment.performed}
-                      </p>
-                    )}
-                    {event.treatment?.medicines?.length > 0 && (
-                      <p className="mb-1 text-xs text-ink-500">
-                        Medicines: {event.treatment.medicines.map((m) => m.name).join(', ')}
-                      </p>
-                    )}
-                    {event.vaccination?.vaccineName && (
-                      <p className="mb-1 text-sm text-ink-600">
-                        <span className="font-medium">Vaccine:</span> {event.vaccination.vaccineName}
-                      </p>
-                    )}
+
+                    <div className="space-y-2">
+                      {/* Farmer-reported symptoms */}
+                      {event.farmerReportedSymptoms && (
+                        <div className="border-l-2 border-mist-300 pl-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">Farmer reported</p>
+                          <p className="text-sm text-ink-600">{event.farmerReportedSymptoms}</p>
+                        </div>
+                      )}
+
+                      {/* Examination */}
+                      {(event.examination?.observedSymptoms || event.examination?.physicalFindings) && (
+                        <div className="border-l-2 border-mist-400 pl-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">🩺 Examination</p>
+                          {event.examination.observedSymptoms && (
+                            <p className="text-sm text-ink-600"><span className="font-medium">Observed:</span> {event.examination.observedSymptoms}</p>
+                          )}
+                          {event.examination.physicalFindings && (
+                            <p className="text-sm text-ink-600"><span className="font-medium">Findings:</span> {event.examination.physicalFindings}</p>
+                          )}
+                          {event.examination.notes && (
+                            <p className="text-sm text-ink-500">{event.examination.notes}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Vitals */}
+                      {(event.examination?.vitals?.temperatureC || event.examination?.vitals?.heartRateBpm || event.examination?.vitals?.respirationRate) && (
+                        <div className="flex flex-wrap gap-3 rounded-lg bg-mist-50 p-2 font-data text-xs text-ink-600">
+                          {event.examination.vitals.temperatureC && <span>🌡️ {event.examination.vitals.temperatureC}°C</span>}
+                          {event.examination.vitals.heartRateBpm && <span>❤️ {event.examination.vitals.heartRateBpm} bpm</span>}
+                          {event.examination.vitals.respirationRate && <span>🫁 {event.examination.vitals.respirationRate} /min</span>}
+                        </div>
+                      )}
+
+                      {/* Clinical assessment */}
+                      {event.clinicalAssessment && (
+                        <div className="border-l-2 border-serum-500 pl-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-serum-700">Clinical decision</p>
+                          <p className="text-sm text-ink-700">{event.clinicalAssessment}</p>
+                        </div>
+                      )}
+
+                      {/* Treatment */}
+                      {event.treatment?.performed && (
+                        <div className="border-l-2 border-hide-500 pl-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-hide-700">💊 Treatment</p>
+                          <p className="text-sm text-ink-700">{event.treatment.performed}</p>
+                        </div>
+                      )}
+
+                      {/* Individual medicines */}
+                      {event.treatment?.medicines?.length > 0 && (
+                        <div className="space-y-1.5 rounded-lg bg-serum-50/50 p-2.5">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-serum-700">Medicines</p>
+                          {event.treatment.medicines.map((med, i) => (
+                            <div key={i} className="text-xs text-ink-600">
+                              <span className="font-medium text-ink-800">Rx {String(i + 1).padStart(2, '0')}: {med.name}</span>
+                              {med.dosage && <span> · {med.dosage}</span>}
+                              {med.frequency && <span> · {med.frequency}</span>}
+                              {med.duration && <span> · {med.duration}</span>}
+                              {med.route && <span> · {med.route}</span>}
+                              {med.instructions && <p className="mt-0.5 text-ink-500">{med.instructions}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Vaccination */}
+                      {event.vaccination?.vaccineName && (
+                        <div className="border-l-2 border-pasture-500 pl-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-pasture-700">💉 Vaccine</p>
+                          <p className="text-sm text-ink-700">{event.vaccination.vaccineName}</p>
+                          {event.vaccination.nextDueDate && (
+                            <p className="text-xs font-medium text-amber-alert-600">
+                              Next due: {new Date(event.vaccination.nextDueDate).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
                     {event.veterinarianId?.name && (
-                      <p className="mt-2 text-xs text-ink-400">Dr. {event.veterinarianId.name}</p>
+                      <p className="mt-3 text-xs text-ink-400">
+                        Dr. {event.veterinarianId.name}
+                        {event.veterinarianId.specialization ? ` · ${event.veterinarianId.specialization}` : ''}
+                      </p>
+                    )}
+                    {event.treatment?.followUpDate && (
+                      <p className="mt-1 text-xs font-medium text-amber-alert-600">
+                        📅 Follow-up: {new Date(event.treatment.followUpDate).toLocaleDateString()}
+                      </p>
                     )}
                   </div>
                 </li>

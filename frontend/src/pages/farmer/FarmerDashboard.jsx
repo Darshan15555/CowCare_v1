@@ -11,6 +11,7 @@ import StatusBadge from '../../components/common/StatusBadge';
 import RemindersSection from '../../components/common/RemindersSection';
 import { useCountUp } from '../../hooks/useCountUp';
 import { useAuth } from '../../context/AuthContext';
+import { CATTLE_STATUS } from '../../utils/constants';
 
 export default function FarmerDashboard() {
   const { user } = useAuth();
@@ -43,6 +44,12 @@ export default function FarmerDashboard() {
   );
   const followUps = requests.filter((r) => r.status === 'COMPLETED');
 
+  // Health status breakdown
+  const statusCounts = {};
+  cattle.forEach((c) => {
+    statusCounts[c.status] = (statusCounts[c.status] || 0) + 1;
+  });
+
   return (
     <div className="space-y-6">
       <div>
@@ -52,9 +59,26 @@ export default function FarmerDashboard() {
         <p className="text-sm text-ink-500">Here&apos;s what&apos;s happening with your cattle.</p>
       </div>
 
+      {/* Cattle health status breakdown */}
+      <div className="rounded-xl border border-mist-200 bg-white p-4 shadow-sm">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-ink-900">My Cattle ({cattle.length})</h2>
+          <Link to="/farmer/cattle" className="text-xs font-medium text-pasture-700 hover:underline">
+            View all
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {Object.entries(CATTLE_STATUS).map(([key, cfg]) => (
+            <div key={key} className={`rounded-lg p-3 text-center ${cfg.badgeClass}`}>
+              <p className="font-display text-xl font-semibold">{statusCounts[key] || 0}</p>
+              <p className="text-xs font-medium">{cfg.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Quick stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <StatCard label="Total Cattle" value={cattle.length} />
+      <div className="grid grid-cols-2 gap-3">
         <StatCard label="Active Requests" value={activeRequests.length} />
         <StatCard label="Completed Visits" value={followUps.length} />
       </div>

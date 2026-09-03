@@ -52,4 +52,11 @@ const updateMeValidators = [
     .withMessage('endTime must be in HH:MM format.'),
 ];
 
-module.exports = { registerValidators, loginValidators, updateMeValidators };
+const changePasswordValidators = [
+  body('currentPassword').notEmpty().withMessage('Current password is required.'),
+  body('newPassword')
+    .isLength({ min: 6 })
+    .withMessage('New password must be at least 6 characters.'),
+];
+
+module.exports = { registerValidators, loginValidators, updateMeValidators, changePasswordValidators };

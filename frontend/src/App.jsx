@@ -38,6 +38,8 @@ const ScanQr = lazy(() => import('./pages/vet/ScanQr'));
 
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const ManageUsers = lazy(() => import('./pages/admin/ManageUsers'));
+const AdminCattle = lazy(() => import('./pages/admin/AdminCattle'));
+const AdminRequests = lazy(() => import('./pages/admin/AdminRequests'));
 
 const ROLE_HOME = { FARMER: '/farmer', VETERINARIAN: '/vet', ADMIN: '/admin' };
 
@@ -99,6 +101,8 @@ export default function App() {
                 <Route element={<DashboardLayout />}>
                   <Route path="/admin" element={<AdminDashboard />} />
                   <Route path="/admin/users" element={<ManageUsers />} />
+                  <Route path="/admin/cattle" element={<AdminCattle />} />
+                  <Route path="/admin/requests" element={<AdminRequests />} />
                 </Route>
               </Route>
 

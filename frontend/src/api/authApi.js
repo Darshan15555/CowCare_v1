@@ -7,4 +7,5 @@ export const authApi = {
   logout: () => axiosClient.post('/auth/logout'),
   getMe: () => axiosClient.get('/auth/me'),
   updateMe: (payload) => axiosClient.patch('/auth/me', payload),
+  changePassword: (payload) => axiosClient.patch('/auth/change-password', payload),
 };

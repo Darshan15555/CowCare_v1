@@ -196,4 +196,39 @@ const updateMe = asyncHandler(async (req, res) => {
   res.json({ success: true, user: user.toSafeObject() });
 });
 
-module.exports = { register, login, refresh, logout, getMe, updateMe };
+// @route PATCH /api/auth/change-password
+// @access Private
+const changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    res.status(400);
+    throw new Error('Current password and new password are required.');
+  }
+
+  // Need to explicitly select the password field since it's select: false on the schema.
+  const user = await User.findById(req.user._id).select('+password');
+  if (!user) {
+    res.status(404);
+    throw new Error('User not found.');
+  }
+
+  const isMatch = await user.comparePassword(currentPassword);
+  if (!isMatch) {
+    res.status(401);
+    throw new Error('Current password is incorrect.');
+  }
+
+  user.password = newPassword;
+  // Invalidate the refresh token so other sessions are forced to re-authenticate
+  // with the new password.
+  user.refreshTokenHash = null;
+  await user.save();
+
+  // Re-issue tokens for the current session so the user isn't logged out.
+  const accessToken = await issueTokens(res, user);
+
+  res.json({ success: true, message: 'Password changed successfully.', accessToken });
+});
+
+module.exports = { register, login, refresh, logout, getMe, updateMe, changePassword };

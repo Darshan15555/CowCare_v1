@@ -21,11 +21,19 @@ const EVENT_ICON_BG = {
   FOLLOW_UP: 'bg-amber-alert-600',
 };
 
+const TABS = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'timeline', label: 'Timeline' },
+  { key: 'vaccinations', label: 'Vaccinations' },
+  { key: 'cases', label: 'Active Cases' },
+  { key: 'qr', label: 'QR Code' },
+];
+
 export default function CattleProfile() {
   const { id } = useParams();
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showQr, setShowQr] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
   const [showTransferForm, setShowTransferForm] = useState(false);
   const [transferPhone, setTransferPhone] = useState('');
   const [isTransferring, setIsTransferring] = useState(false);
@@ -44,6 +52,8 @@ export default function CattleProfile() {
 
   const { cattle, timeline, activeCases } = data;
   const statusConfig = CATTLE_STATUS[cattle.status] || CATTLE_STATUS.HEALTHY;
+
+  const vaccinations = timeline.filter((e) => e.eventType === 'VACCINATION');
 
   const handleInitiateTransfer = async () => {
     if (!transferPhone.trim()) {
@@ -69,10 +79,10 @@ export default function CattleProfile() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Health passport */}
+    <div className="space-y-5">
+      {/* Health passport header */}
       <div className="relative overflow-hidden rounded-2xl border border-mist-200 bg-white shadow-sm">
-        {/* Rotated status stamp — the passport's signature detail */}
+        {/* Rotated status stamp */}
         <div className="pointer-events-none absolute right-4 top-4 z-10 flex h-16 w-16 -rotate-[14deg] items-center justify-center rounded-full border-2 border-dashed border-white/40 text-center text-[9px] font-bold uppercase leading-tight tracking-wider text-white/80">
           {statusConfig.label}
         </div>
@@ -96,7 +106,7 @@ export default function CattleProfile() {
           </div>
         </div>
 
-        {/* Perforated seam between "photo page" and "details page" */}
+        {/* Perforated seam */}
         <div className="relative h-0 border-t-2 border-dashed border-mist-200">
           <span className="absolute -left-2 -top-2 h-4 w-4 rounded-full bg-mist-50" />
           <span className="absolute -right-2 -top-2 h-4 w-4 rounded-full bg-mist-50" />
@@ -111,12 +121,9 @@ export default function CattleProfile() {
             >
               {cattle.cattleId} <Copy size={13} />
             </button>
-            <button
-              onClick={() => setShowQr(!showQr)}
-              className="rounded-lg border border-pasture-600 px-3 py-2 text-xs font-medium text-pasture-700 hover:bg-pasture-50"
-            >
-              {showQr ? 'Hide QR' : 'Show QR Code'}
-            </button>
+            <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${statusConfig.badgeClass}`}>
+              {statusConfig.label}
+            </span>
           </div>
 
           <div className="flex gap-6 text-sm text-ink-600">
@@ -128,159 +135,378 @@ export default function CattleProfile() {
                 Age <span className="ml-1 font-medium text-ink-800">{cattle.estimatedAgeYears} yrs</span>
               </p>
             )}
+            {cattle.color && (
+              <p>
+                Color <span className="ml-1 font-medium text-ink-800">{cattle.color}</span>
+              </p>
+            )}
           </div>
         </div>
-
-        {showQr && cattle.qrCodeDataUrl && (
-          <div className="flex flex-col items-center gap-2 border-t border-mist-100 p-5">
-            <img src={cattle.qrCodeDataUrl} alt="Cattle QR" className="h-40 w-40" />
-            <p className="font-data text-xs text-ink-400">Scan resolves to this ID only — never raw medical data.</p>
-          </div>
-        )}
       </div>
 
-      {/* Transfer ownership */}
-      <div className="rounded-xl border border-mist-200 bg-white p-4 shadow-sm">
-        {!showTransferForm ? (
+      {/* Tab bar */}
+      <div className="flex gap-1 overflow-x-auto rounded-xl border border-mist-200 bg-white p-1 shadow-sm">
+        {TABS.map((tab) => (
           <button
-            onClick={() => setShowTransferForm(true)}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-mist-300 py-2.5 text-sm font-medium text-ink-600 hover:bg-mist-50"
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`shrink-0 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
+              activeTab === tab.key
+                ? 'bg-pasture-600 text-white'
+                : 'text-ink-600 hover:bg-mist-50'
+            }`}
           >
-            <ArrowRightLeft size={16} /> Transfer Ownership
+            {tab.label}
+            {tab.key === 'cases' && activeCases?.length > 0 && (
+              <span className="ml-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-vital-500 text-[10px] font-bold text-white">
+                {activeCases.length}
+              </span>
+            )}
           </button>
-        ) : (
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold text-ink-900">Transfer {cattle.name} to another farmer</h2>
-            <p className="text-xs text-ink-500">
-              The new owner must already have a CowCare account and will need to accept before
-              ownership changes. The full health history moves with the cow.
-            </p>
-            <input
-              type="tel"
-              value={transferPhone}
-              onChange={(e) => setTransferPhone(e.target.value)}
-              placeholder="New owner's phone number"
-              className="input font-data"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowTransferForm(false)}
-                className="flex-1 rounded-lg border border-mist-300 py-2 text-sm font-medium text-ink-600"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleInitiateTransfer}
-                disabled={isTransferring}
-                className="flex-1 btn-pop py-2 text-sm disabled:opacity-60"
-              >
-                {isTransferring ? 'Sending...' : 'Send Request'}
-              </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      {activeTab === 'overview' && (
+        <div className="space-y-4">
+          {/* Quick summary */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-xl border border-mist-200 bg-white p-3 text-center shadow-sm">
+              <p className="font-display text-lg font-semibold text-pasture-700">{timeline.length}</p>
+              <p className="text-xs text-ink-500">Medical Events</p>
+            </div>
+            <div className="rounded-xl border border-mist-200 bg-white p-3 text-center shadow-sm">
+              <p className="font-display text-lg font-semibold text-serum-700">{vaccinations.length}</p>
+              <p className="text-xs text-ink-500">Vaccinations</p>
+            </div>
+            <div className="rounded-xl border border-mist-200 bg-white p-3 text-center shadow-sm">
+              <p className="font-display text-lg font-semibold text-amber-alert-700">{activeCases?.length || 0}</p>
+              <p className="text-xs text-ink-500">Active Cases</p>
             </div>
           </div>
-        )}
-      </div>
 
-      {/* Active cases */}
-      {activeCases?.length > 0 && (
-        <section>
-          <h2 className="mb-2 flex items-center gap-1.5 text-base font-semibold text-ink-900">
-            <Siren size={16} className="text-vital-500" /> Current Cases
-          </h2>
-          <div className="space-y-2">
-            {activeCases.map((c) => (
-              <Link
-                key={c._id}
-                to={`/farmer/requests/${c._id}`}
-                className="block rounded-lg border border-amber-alert-200 bg-amber-alert-50 p-3 text-sm text-amber-alert-800 hover:bg-amber-alert-100"
+          {/* Transfer ownership */}
+          <div className="rounded-xl border border-mist-200 bg-white p-4 shadow-sm">
+            {!showTransferForm ? (
+              <button
+                onClick={() => setShowTransferForm(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-mist-300 py-2.5 text-sm font-medium text-ink-600 hover:bg-mist-50"
               >
-                {c.problemDescription} — <span className="font-medium">{c.status}</span>
-              </Link>
-            ))}
+                <ArrowRightLeft size={16} /> Transfer Ownership
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <h2 className="text-sm font-semibold text-ink-900">Transfer {cattle.name} to another farmer</h2>
+                <p className="text-xs text-ink-500">
+                  The new owner must already have a CowCare account and will need to accept before
+                  ownership changes. The full health history moves with the cow.
+                </p>
+                <input
+                  type="tel"
+                  value={transferPhone}
+                  onChange={(e) => setTransferPhone(e.target.value)}
+                  placeholder="New owner's phone number"
+                  className="input font-data"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowTransferForm(false)}
+                    className="flex-1 rounded-lg border border-mist-300 py-2 text-sm font-medium text-ink-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleInitiateTransfer}
+                    disabled={isTransferring}
+                    className="flex-1 btn-pop py-2 text-sm disabled:opacity-60"
+                  >
+                    {isTransferring ? 'Sending...' : 'Send Request'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Recent timeline preview */}
+          {timeline.length > 0 && (
+            <section>
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-base font-semibold text-ink-900">Recent Events</h2>
+                <button onClick={() => setActiveTab('timeline')} className="text-sm font-medium text-pasture-700 hover:underline">
+                  View all
+                </button>
+              </div>
+              <div className="space-y-2">
+                {timeline.slice(0, 3).map((event) => (
+                  <TimelineEventCard key={event._id} event={event} compact />
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'timeline' && (
+        <section>
+          <h2 className="mb-3 text-base font-semibold text-ink-900">Health Timeline</h2>
+          {timeline.length === 0 ? (
+            <EmptyState text="No medical events recorded yet." />
+          ) : (
+            <ol className="relative space-y-6 border-l-2 border-pasture-100 pl-5">
+              {timeline.map((event) => (
+                <TimelineEvent key={event._id} event={event} />
+              ))}
+            </ol>
+          )}
         </section>
       )}
 
-      {/* Health timeline */}
-      <section>
-        <h2 className="mb-3 text-base font-semibold text-ink-900">Health Timeline</h2>
-        {timeline.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-mist-300 bg-white p-6 text-center text-sm text-ink-500">
-            No medical events recorded yet.
-          </div>
-        ) : (
-          <ol className="relative space-y-6 border-l-2 border-pasture-100 pl-5">
-            {timeline.map((event) => {
-              const Icon = EVENT_ICON[event.eventType] || Stethoscope;
-              return (
-                <li key={event._id} className="relative">
-                  <span className={`absolute -left-[27px] flex h-6 w-6 items-center justify-center rounded-full text-white ${EVENT_ICON_BG[event.eventType] || 'bg-ink-500'}`}>
-                    <Icon size={13} />
-                  </span>
-                  <div className="rounded-xl border border-mist-200 bg-white p-4 shadow-sm">
-                    <div className="mb-2 flex items-center justify-between">
-                      <p className="text-xs font-medium uppercase tracking-wide text-pasture-700">
-                        {event.eventType.replace('_', ' ')}
-                      </p>
-                      <p className="font-data text-xs text-ink-400">
-                        {new Date(event.eventDate).toLocaleDateString(undefined, {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                        })}
-                      </p>
+      {activeTab === 'vaccinations' && (
+        <section>
+          <h2 className="mb-3 text-base font-semibold text-ink-900">Vaccinations</h2>
+          {vaccinations.length === 0 ? (
+            <EmptyState text="No vaccinations recorded yet." />
+          ) : (
+            <div className="space-y-3">
+              {vaccinations.map((event) => (
+                <div key={event._id} className="rounded-xl border border-pasture-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Syringe size={16} className="text-pasture-600" />
+                      <p className="text-sm font-medium text-ink-900">{event.vaccination?.vaccineName}</p>
                     </div>
-
-                    <div className="space-y-2">
-                      {event.farmerReportedSymptoms && (
-                        <div className="border-l-2 border-mist-300 pl-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
-                            Farmer reported
-                          </p>
-                          <p className="text-sm text-ink-600">{event.farmerReportedSymptoms}</p>
-                        </div>
-                      )}
-                      {event.clinicalAssessment && (
-                        <div className="border-l-2 border-serum-500 pl-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-serum-700">
-                            Clinical decision
-                          </p>
-                          <p className="text-sm text-ink-700">{event.clinicalAssessment}</p>
-                        </div>
-                      )}
-                      {event.treatment?.performed && (
-                        <div className="border-l-2 border-hide-500 pl-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-hide-700">
-                            Treatment given
-                          </p>
-                          <p className="text-sm text-ink-700">{event.treatment.performed}</p>
-                        </div>
-                      )}
-                      {event.vaccination?.vaccineName && (
-                        <div className="border-l-2 border-pasture-500 pl-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-pasture-700">
-                            Vaccine
-                          </p>
-                          <p className="text-sm text-ink-700">{event.vaccination.vaccineName}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {event.veterinarianId?.name && (
-                      <p className="mt-3 text-xs text-ink-400">Dr. {event.veterinarianId.name}</p>
-                    )}
-                    {event.treatment?.followUpDate && (
-                      <p className="mt-1 text-xs font-medium text-amber-alert-600">
-                        Follow-up: {new Date(event.treatment.followUpDate).toLocaleDateString()}
-                      </p>
-                    )}
+                    <p className="font-data text-xs text-ink-400">
+                      {new Date(event.eventDate).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </p>
                   </div>
-                </li>
-              );
+                  {event.vaccination?.nextDueDate && (
+                    <p className="mt-2 text-xs font-medium text-amber-alert-600">
+                      Next due: {new Date(event.vaccination.nextDueDate).toLocaleDateString()}
+                    </p>
+                  )}
+                  {event.veterinarianId?.name && (
+                    <p className="mt-1 text-xs text-ink-400">Dr. {event.veterinarianId.name}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {activeTab === 'cases' && (
+        <section>
+          <h2 className="mb-3 text-base font-semibold text-ink-900">Active Cases</h2>
+          {!activeCases?.length ? (
+            <EmptyState text="No active veterinary cases." />
+          ) : (
+            <div className="space-y-2">
+              {activeCases.map((c) => (
+                <Link
+                  key={c._id}
+                  to={`/farmer/requests/${c._id}`}
+                  className="block rounded-xl border border-amber-alert-200 bg-amber-alert-50 p-4 text-sm text-amber-alert-800 hover:bg-amber-alert-100"
+                >
+                  <p className="font-medium">{c.problemDescription}</p>
+                  <p className="mt-1 text-xs">Status: <span className="font-semibold">{c.status.replace('_', ' ')}</span></p>
+                  <p className="mt-0.5 text-xs text-amber-alert-600">
+                    {new Date(c.createdAt).toLocaleDateString()}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {activeTab === 'qr' && (
+        <section className="flex flex-col items-center gap-4">
+          <h2 className="text-base font-semibold text-ink-900">QR Code</h2>
+          {cattle.qrCodeDataUrl ? (
+            <>
+              <div className="rounded-2xl border border-mist-200 bg-white p-6 shadow-sm">
+                <img src={cattle.qrCodeDataUrl} alt="Cattle QR" className="h-48 w-48" />
+              </div>
+              <p className="font-data text-sm font-medium text-ink-700">{cattle.cattleId}</p>
+              <p className="max-w-sm text-center text-xs text-ink-400">
+                Scan resolves to this ID only — never raw medical data. Authorized veterinarians can
+                then look up the cattle&apos;s full health profile through the app.
+              </p>
+            </>
+          ) : (
+            <EmptyState text="QR code not available." />
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+/** Full timeline event — used in the Timeline tab */
+function TimelineEvent({ event }) {
+  const Icon = EVENT_ICON[event.eventType] || Stethoscope;
+  return (
+    <li className="relative">
+      <span className={`absolute -left-[27px] flex h-6 w-6 items-center justify-center rounded-full text-white ${EVENT_ICON_BG[event.eventType] || 'bg-ink-500'}`}>
+        <Icon size={13} />
+      </span>
+      <div className="rounded-xl border border-mist-200 bg-white p-4 shadow-sm">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-xs font-medium uppercase tracking-wide text-pasture-700">
+            {event.eventType.replace('_', ' ')}
+          </p>
+          <p className="font-data text-xs text-ink-400">
+            {new Date(event.eventDate).toLocaleDateString(undefined, {
+              day: '2-digit', month: 'short', year: 'numeric',
             })}
-          </ol>
+          </p>
+        </div>
+
+        <div className="space-y-2.5">
+          {/* Farmer-reported problem */}
+          {event.farmerReportedSymptoms && (
+            <div className="border-l-2 border-mist-300 pl-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                Farmer reported
+              </p>
+              <p className="text-sm text-ink-600">{event.farmerReportedSymptoms}</p>
+            </div>
+          )}
+
+          {/* Examination details */}
+          {(event.examination?.observedSymptoms || event.examination?.physicalFindings) && (
+            <div className="border-l-2 border-mist-400 pl-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                🩺 Examination
+              </p>
+              {event.examination.observedSymptoms && (
+                <p className="text-sm text-ink-600"><span className="font-medium">Observed:</span> {event.examination.observedSymptoms}</p>
+              )}
+              {event.examination.physicalFindings && (
+                <p className="text-sm text-ink-600"><span className="font-medium">Findings:</span> {event.examination.physicalFindings}</p>
+              )}
+              {event.examination.notes && (
+                <p className="text-sm text-ink-500">{event.examination.notes}</p>
+              )}
+            </div>
+          )}
+
+          {/* Vitals */}
+          {(event.examination?.vitals?.temperatureC || event.examination?.vitals?.heartRateBpm || event.examination?.vitals?.respirationRate) && (
+            <div className="flex flex-wrap gap-3 rounded-lg bg-mist-50 p-2 font-data text-xs text-ink-600">
+              {event.examination.vitals.temperatureC && (
+                <span>🌡️ {event.examination.vitals.temperatureC}°C</span>
+              )}
+              {event.examination.vitals.heartRateBpm && (
+                <span>❤️ {event.examination.vitals.heartRateBpm} bpm</span>
+              )}
+              {event.examination.vitals.respirationRate && (
+                <span>🫁 {event.examination.vitals.respirationRate} /min</span>
+              )}
+            </div>
+          )}
+
+          {/* Clinical assessment */}
+          {event.clinicalAssessment && (
+            <div className="border-l-2 border-serum-500 pl-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-serum-700">
+                Clinical decision
+              </p>
+              <p className="text-sm text-ink-700">{event.clinicalAssessment}</p>
+            </div>
+          )}
+
+          {/* Treatment */}
+          {event.treatment?.performed && (
+            <div className="border-l-2 border-hide-500 pl-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-hide-700">
+                💊 Treatment given
+              </p>
+              <p className="text-sm text-ink-700">{event.treatment.performed}</p>
+            </div>
+          )}
+
+          {/* Individual medicines */}
+          {event.treatment?.medicines?.length > 0 && (
+            <div className="space-y-1.5 rounded-lg bg-serum-50/50 p-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-serum-700">Medicines prescribed</p>
+              {event.treatment.medicines.map((med, i) => (
+                <div key={i} className="text-xs text-ink-600">
+                  <span className="font-medium text-ink-800">Rx {String(i + 1).padStart(2, '0')}: {med.name}</span>
+                  {med.dosage && <span> · {med.dosage}</span>}
+                  {med.frequency && <span> · {med.frequency}</span>}
+                  {med.duration && <span> · {med.duration}</span>}
+                  {med.route && <span> · {med.route}</span>}
+                  {med.instructions && <p className="mt-0.5 text-ink-500">{med.instructions}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Vaccination */}
+          {event.vaccination?.vaccineName && (
+            <div className="border-l-2 border-pasture-500 pl-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-pasture-700">
+                💉 Vaccine
+              </p>
+              <p className="text-sm text-ink-700">{event.vaccination.vaccineName}</p>
+              {event.vaccination.nextDueDate && (
+                <p className="text-xs font-medium text-amber-alert-600">
+                  Next due: {new Date(event.vaccination.nextDueDate).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {event.veterinarianId?.name && (
+          <p className="mt-3 text-xs text-ink-400">Dr. {event.veterinarianId.name}{event.veterinarianId.specialization ? ` · ${event.veterinarianId.specialization}` : ''}</p>
         )}
-      </section>
+        {event.treatment?.followUpDate && (
+          <p className="mt-1 text-xs font-medium text-amber-alert-600">
+            📅 Follow-up: {new Date(event.treatment.followUpDate).toLocaleDateString()}
+          </p>
+        )}
+      </div>
+    </li>
+  );
+}
+
+/** Compact timeline card — used in Overview tab preview */
+function TimelineEventCard({ event }) {
+  const Icon = EVENT_ICON[event.eventType] || Stethoscope;
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-mist-200 bg-white p-3 shadow-sm">
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white ${EVENT_ICON_BG[event.eventType] || 'bg-ink-500'}`}>
+        <Icon size={14} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium uppercase tracking-wide text-pasture-700">
+            {event.eventType.replace('_', ' ')}
+          </p>
+          <p className="font-data text-xs text-ink-400">
+            {new Date(event.eventDate).toLocaleDateString(undefined, { day: '2-digit', month: 'short' })}
+          </p>
+        </div>
+        {event.clinicalAssessment && (
+          <p className="mt-0.5 line-clamp-1 text-sm text-ink-600">{event.clinicalAssessment}</p>
+        )}
+        {event.vaccination?.vaccineName && (
+          <p className="mt-0.5 text-sm text-ink-600">{event.vaccination.vaccineName}</p>
+        )}
+        {event.veterinarianId?.name && (
+          <p className="text-xs text-ink-400">Dr. {event.veterinarianId.name}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ text }) {
+  return (
+    <div className="rounded-xl border border-dashed border-mist-300 bg-white p-6 text-center text-sm text-ink-500">
+      {text}
     </div>
   );
 }

@@ -86,4 +86,123 @@ const setUserActiveStatus = asyncHandler(async (req, res) => {
   res.json({ success: true, user: user.toSafeObject() });
 });
 
-module.exports = { getDashboardStats, getUsers, setUserActiveStatus, getEscalatedRequests };
+// @route GET /api/admin/cattle
+// @access Private (ADMIN)
+const getAllCattle = asyncHandler(async (req, res) => {
+  const { search, status } = req.query;
+  const filter = { isActive: true };
+
+  if (status) filter.status = status;
+  if (search) {
+    filter.$or = [
+      { name: { $regex: search, $options: 'i' } },
+      { cattleId: { $regex: search, $options: 'i' } },
+    ];
+  }
+
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+  const skip = (page - 1) * limit;
+
+  const [cattle, total] = await Promise.all([
+    Cattle.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate('ownerId', 'name phone farmName'),
+    Cattle.countDocuments(filter),
+  ]);
+
+  res.json({
+    success: true,
+    count: cattle.length,
+    cattle,
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  });
+});
+
+// @route GET /api/admin/requests
+// @access Private (ADMIN)
+const getAllRequests = asyncHandler(async (req, res) => {
+  const { status, priority } = req.query;
+  const filter = {};
+
+  if (status) filter.status = status;
+  if (priority) filter.priority = priority;
+
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+  const skip = (page - 1) * limit;
+
+  const [requests, total] = await Promise.all([
+    VetRequest.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate('farmerId', 'name phone')
+      .populate('veterinarianId', 'name specialization')
+      .populate('cattleId', 'name cattleId'),
+    VetRequest.countDocuments(filter),
+  ]);
+
+  res.json({
+    success: true,
+    count: requests.length,
+    requests,
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  });
+});
+
+// @route GET /api/admin/analytics
+// @access Private (ADMIN)
+const getAnalytics = asyncHandler(async (req, res) => {
+  // Cattle health status distribution
+  const cattleStatusDistribution = await Cattle.aggregate([
+    { $match: { isActive: true } },
+    { $group: { _id: '$status', count: { $sum: 1 } } },
+  ]);
+
+  // Requests by priority
+  const requestsByPriority = await VetRequest.aggregate([
+    { $group: { _id: '$priority', count: { $sum: 1 } } },
+  ]);
+
+  // Requests by status
+  const requestsByStatus = await VetRequest.aggregate([
+    { $group: { _id: '$status', count: { $sum: 1 } } },
+  ]);
+
+  // Requests created per week (last 12 weeks)
+  const twelveWeeksAgo = new Date();
+  twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 84);
+  const requestsOverTime = await VetRequest.aggregate([
+    { $match: { createdAt: { $gte: twelveWeeksAgo } } },
+    {
+      $group: {
+        _id: { $dateToString: { format: '%Y-%U', date: '$createdAt' } },
+        count: { $sum: 1 },
+      },
+    },
+    { $sort: { _id: 1 } },
+  ]);
+
+  res.json({
+    success: true,
+    analytics: {
+      cattleStatusDistribution,
+      requestsByPriority,
+      requestsByStatus,
+      requestsOverTime,
+    },
+  });
+});
+
+module.exports = {
+  getDashboardStats,
+  getUsers,
+  setUserActiveStatus,
+  getEscalatedRequests,
+  getAllCattle,
+  getAllRequests,
+  getAnalytics,
+};

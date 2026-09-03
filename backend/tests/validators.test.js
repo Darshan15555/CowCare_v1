@@ -4,6 +4,7 @@ const { validationResult } = require('express-validator');
 const {
   registerValidators,
   loginValidators,
+  changePasswordValidators,
 } = require('../validators/authValidators');
 const { createRequestValidators, submitRatingValidators } = require('../validators/requestValidators');
 const {
@@ -197,3 +198,29 @@ test('transfer response accepts ACCEPT, REJECT, and CANCEL', async () => {
     assert.equal(isValid, true, `${action} should be valid`);
   }
 });
+
+test('change password rejects missing current password', async () => {
+  const { isValid, errors } = await runValidators(changePasswordValidators, {
+    newPassword: 'newsecret123',
+  });
+  assert.equal(isValid, false);
+  assert.ok(errors.some((e) => e.path === 'currentPassword'));
+});
+
+test('change password rejects short new password', async () => {
+  const { isValid, errors } = await runValidators(changePasswordValidators, {
+    currentPassword: 'oldsecret123',
+    newPassword: '123',
+  });
+  assert.equal(isValid, false);
+  assert.ok(errors.some((e) => e.path === 'newPassword'));
+});
+
+test('change password accepts valid payload', async () => {
+  const { isValid } = await runValidators(changePasswordValidators, {
+    currentPassword: 'oldsecret123',
+    newPassword: 'newsecret123',
+  });
+  assert.equal(isValid, true);
+});
+

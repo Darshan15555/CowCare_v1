@@ -1,19 +1,27 @@
 import { useEffect, useState } from 'react';
-import { Users, Stethoscope, Beef, Activity, CheckCircle2, Siren, AlertTriangle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Users, Stethoscope, Beef, Activity, CheckCircle2, Siren, AlertTriangle, ArrowRight, BarChart3 } from 'lucide-react';
 import { adminApi } from '../../api/adminApi';
 import { useCountUp } from '../../hooks/useCountUp';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import { CATTLE_STATUS, PRIORITY, STATUS } from '../../utils/constants';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [escalated, setEscalated] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([adminApi.getDashboardStats(), adminApi.getEscalatedRequests()])
-      .then(([statsRes, escalatedRes]) => {
+    Promise.all([
+      adminApi.getDashboardStats(),
+      adminApi.getEscalatedRequests(),
+      adminApi.getAnalytics().catch(() => ({ data: { analytics: null } })),
+    ])
+      .then(([statsRes, escalatedRes, analyticsRes]) => {
         setStats(statsRes.data.stats);
         setEscalated(escalatedRes.data.requests);
+        setAnalytics(analyticsRes.data.analytics);
       })
       .finally(() => setIsLoading(false));
   }, []);
@@ -31,7 +39,30 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <h1 className="font-display text-2xl font-medium text-ink-900">Platform Overview</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <h1 className="font-display text-2xl font-medium text-ink-900">Platform Overview</h1>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to="/admin/users"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-mist-300 bg-white px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-mist-50 shadow-sm"
+          >
+            <Users size={14} /> Users
+          </Link>
+          <Link
+            to="/admin/cattle"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-mist-300 bg-white px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-mist-50 shadow-sm"
+          >
+            <Beef size={14} /> Cattle
+          </Link>
+          <Link
+            to="/admin/requests"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-mist-300 bg-white px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-mist-50 shadow-sm"
+          >
+            <Activity size={14} /> Requests
+          </Link>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {cards.map(({ label, value, icon: Icon, color }) => (
           <AdminStatCard key={label} label={label} value={value} icon={Icon} color={color} />
@@ -66,6 +97,68 @@ export default function AdminDashboard() {
             ))}
           </div>
         </section>
+      )}
+
+      {/* Analytics Breakdown */}
+      {analytics && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Cattle Health Status Distribution */}
+          <div className="rounded-xl border border-mist-200 bg-white p-5 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-ink-900 flex items-center gap-1.5">
+                <BarChart3 size={16} className="text-pasture-700" /> Cattle Health Status
+              </h2>
+              <Link to="/admin/cattle" className="text-xs text-pasture-700 hover:underline flex items-center gap-0.5">
+                View all <ArrowRight size={12} />
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(CATTLE_STATUS).map(([key, cfg]) => {
+                const item = analytics.cattleStatusDistribution?.find((d) => d._id === key);
+                const count = item ? item.count : 0;
+                return (
+                  <div key={key} className={`rounded-lg p-3 ${cfg.badgeClass}`}>
+                    <p className="text-xs font-medium">{cfg.label}</p>
+                    <p className="font-display text-xl font-bold mt-1">{count}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Requests Priority Distribution */}
+          <div className="rounded-xl border border-mist-200 bg-white p-5 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-ink-900 flex items-center gap-1.5">
+                <BarChart3 size={16} className="text-serum-700" /> Requests by Urgency
+              </h2>
+              <Link to="/admin/requests" className="text-xs text-pasture-700 hover:underline flex items-center gap-0.5">
+                View all <ArrowRight size={12} />
+              </Link>
+            </div>
+            <div className="space-y-2">
+              {Object.entries(PRIORITY).map(([key, cfg]) => {
+                const item = analytics.requestsByPriority?.find((d) => d._id === key);
+                const count = item ? item.count : 0;
+                const totalReqs = stats.activeCases + stats.completedVisits || 1;
+                const pct = Math.round((count / totalReqs) * 100);
+                return (
+                  <div key={key} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-medium text-ink-700 flex items-center gap-1">
+                        {cfg.icon} {cfg.label}
+                      </span>
+                      <span className="font-data text-ink-500 font-semibold">{count} case{count === 1 ? '' : 's'}</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-mist-100 overflow-hidden">
+                      <div className={`h-full rounded-full ${cfg.dotClass}`} style={{ width: `${Math.min(100, pct)}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

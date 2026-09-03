@@ -32,6 +32,20 @@ export default function VetDashboard() {
   const routinePending = pending.filter((r) => r.priority === 'ROUTINE');
   const sortedPending = [...emergencyPending, ...urgentPending, ...routinePending];
 
+  // Today's visits — requests with preferredDate matching today
+  const today = new Date().toISOString().split('T')[0];
+  const todaysVisits = requests.filter(
+    (r) =>
+      !['REJECTED', 'CANCELLED'].includes(r.status) &&
+      r.preferredDate &&
+      new Date(r.preferredDate).toISOString().split('T')[0] === today
+  );
+
+  // Recently completed visits (last 10)
+  const recentlyCompleted = requests
+    .filter((r) => r.status === 'COMPLETED')
+    .slice(0, 5);
+
   return (
     <div className="space-y-6">
       <div>
@@ -59,6 +73,23 @@ export default function VetDashboard() {
         )}
       </section>
 
+      {/* Today's visits */}
+      {todaysVisits.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-base font-semibold text-ink-900">
+            Today&apos;s Visits
+            <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-serum-100 px-1.5 text-xs font-bold text-serum-700">
+              {todaysVisits.length}
+            </span>
+          </h2>
+          <div className="space-y-3">
+            {todaysVisits.map((r) => (
+              <RequestCard key={r._id} request={r} />
+            ))}
+          </div>
+        </section>
+      )}
+
       <RemindersSection title="Follow-ups Due" />
 
       <section>
@@ -73,6 +104,18 @@ export default function VetDashboard() {
           </div>
         )}
       </section>
+
+      {/* Recently completed */}
+      {recentlyCompleted.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-base font-semibold text-ink-900">Recently Completed</h2>
+          <div className="space-y-3">
+            {recentlyCompleted.map((r) => (
+              <RequestCard key={r._id} request={r} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

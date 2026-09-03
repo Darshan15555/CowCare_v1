@@ -9,6 +9,7 @@ import {
   ScanLine,
   ClipboardList,
   ArrowRightLeft,
+  Beef,
 } from 'lucide-react';
 
 export const NAV_ITEMS = {
@@ -29,6 +30,8 @@ export const NAV_ITEMS = {
   ADMIN: [
     { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
     { to: '/admin/users', label: 'Users', icon: Users },
+    { to: '/admin/cattle', label: 'Cattle', icon: Beef },
+    { to: '/admin/requests', label: 'Requests', icon: ClipboardList },
   ],
 };
 

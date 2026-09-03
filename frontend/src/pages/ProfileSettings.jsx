@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../utils/errorMessage';
-import { MapPin } from 'lucide-react';
+import { MapPin, Lock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { authApi } from '../api/authApi';
 import { requestApi } from '../api/requestApi';
 import StarRating from '../components/common/StarRating';
+import PasswordInput from '../components/common/PasswordInput';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -21,6 +22,11 @@ export default function ProfileSettings() {
   const isFarmer = user?.role === 'FARMER';
   const [isSaving, setIsSaving] = useState(false);
   const [myRating, setMyRating] = useState(null);
+
+  // Password change state
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   useEffect(() => {
     if (!isFarmer && user?._id) {
@@ -278,6 +284,82 @@ export default function ProfileSettings() {
           {isSaving ? 'Saving...' : 'Save Changes'}
         </button>
       </form>
+
+      {/* Password change section */}
+      <div className="rounded-xl border border-mist-200 bg-white p-5 shadow-sm">
+        {!showPasswordForm ? (
+          <button
+            onClick={() => setShowPasswordForm(true)}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-mist-300 py-2.5 text-sm font-medium text-ink-600 hover:bg-mist-50"
+          >
+            <Lock size={16} /> Change Password
+          </button>
+        ) : (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+                toast.error('New passwords do not match.');
+                return;
+              }
+              setIsChangingPassword(true);
+              try {
+                await authApi.changePassword({
+                  currentPassword: passwordForm.currentPassword,
+                  newPassword: passwordForm.newPassword,
+                });
+                toast.success('Password changed successfully.');
+                setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                setShowPasswordForm(false);
+              } catch (err) {
+                toast.error(getErrorMessage(err, 'Could not change password.'));
+              } finally {
+                setIsChangingPassword(false);
+              }
+            }}
+            className="space-y-3"
+          >
+            <h2 className="text-sm font-semibold text-ink-900">Change Password</h2>
+            <Field label="Current password">
+              <PasswordInput
+                value={passwordForm.currentPassword}
+                onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                placeholder="Enter current password"
+              />
+            </Field>
+            <Field label="New password">
+              <PasswordInput
+                value={passwordForm.newPassword}
+                onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                placeholder="At least 6 characters"
+              />
+            </Field>
+            <Field label="Confirm new password">
+              <PasswordInput
+                value={passwordForm.confirmPassword}
+                onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                placeholder="Re-enter new password"
+              />
+            </Field>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowPasswordForm(false)}
+                className="flex-1 rounded-lg border border-mist-300 py-2 text-sm font-medium text-ink-600"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isChangingPassword}
+                className="flex-1 btn-pop py-2 text-sm disabled:opacity-60"
+              >
+                {isChangingPassword ? 'Changing...' : 'Update Password'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
     </div>
   );
 }
