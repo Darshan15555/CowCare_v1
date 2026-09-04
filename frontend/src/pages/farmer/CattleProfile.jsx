@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Copy, Stethoscope, Syringe, Pill, CalendarClock, Siren, ArrowRightLeft } from 'lucide-react';
+import { Copy, Stethoscope, Syringe, Pill, CalendarClock, Siren, ArrowRightLeft, ShoppingBag, Tag, Sparkles } from 'lucide-react';
 import { getErrorMessage } from '../../utils/errorMessage';
 import { cattleApi } from '../../api/cattleApi';
+import { marketplaceApi } from '../../api/marketplaceApi';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import AiAssistant from '../../components/common/AiAssistant';
 import { CATTLE_STATUS } from '../../utils/constants';
 
 const EVENT_ICON = {
@@ -26,6 +28,7 @@ const TABS = [
   { key: 'timeline', label: 'Timeline' },
   { key: 'vaccinations', label: 'Vaccinations' },
   { key: 'cases', label: 'Active Cases' },
+  { key: 'sale', label: 'Marketplace / Sell' },
   { key: 'qr', label: 'QR Code' },
 ];
 
@@ -38,10 +41,25 @@ export default function CattleProfile() {
   const [transferPhone, setTransferPhone] = useState('');
   const [isTransferring, setIsTransferring] = useState(false);
 
+  // Marketplace sale form state
+  const [salePrice, setSalePrice] = useState('');
+  const [saleDesc, setSaleDesc] = useState('');
+  const [saleContactPhone, setSaleContactPhone] = useState('');
+  const [saleStatus, setSaleStatus] = useState('OPEN_FOR_SALE');
+  const [isSubmittingSale, setIsSubmittingSale] = useState(false);
+
   const load = () => {
     cattleApi
       .getProfile(id)
-      .then((res) => setData(res.data))
+      .then((res) => {
+        setData(res.data);
+        if (res.data?.cattle?.sale) {
+          setSalePrice(res.data.cattle.sale.askingPrice || '');
+          setSaleDesc(res.data.cattle.sale.description || '');
+          setSaleContactPhone(res.data.cattle.sale.contactPhone || '');
+          setSaleStatus(res.data.cattle.sale.status || 'OPEN_FOR_SALE');
+        }
+      })
       .finally(() => setIsLoading(false));
   };
 
@@ -338,6 +356,216 @@ export default function CattleProfile() {
           )}
         </section>
       )}
+
+      {/* Tab: Marketplace / Sell Management */}
+      {activeTab === 'sale' && (
+        <section aria-labelledby="sale-heading" className="space-y-6">
+          <div className="rounded-2xl border border-mist-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-mist-100 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <ShoppingBag className="w-5 h-5 text-pasture-700" />
+                  <h2 id="sale-heading" className="font-display text-lg font-bold text-ink-900">
+                    Livestock Marketplace Listing
+                  </h2>
+                </div>
+                <p className="text-xs text-ink-500 mt-1">
+                  List this cow on the CowCare Cattle Marketplace. Verified medical timeline and vaccines are securely showcased to prospective buyers.
+                </p>
+              </div>
+
+              {['OPEN_FOR_SALE', 'SALE_PENDING'].includes(cattle.sale?.status) && (
+                <Link
+                  to={`/farmer/marketplace/${cattle._id}`}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-pasture-50 text-pasture-800 text-xs font-semibold hover:bg-pasture-100 transition-colors border border-pasture-600/20"
+                >
+                  <span>View Public Listing</span>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-alert-600" />
+                </Link>
+              )}
+            </div>
+
+            {/* Current Listing Status */}
+            <div className="mt-5 space-y-6">
+              <div className="p-4 rounded-xl bg-mist-50 border border-mist-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
+                    Current Marketplace Status
+                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="font-display font-bold text-base text-ink-900">
+                      {cattle.sale?.status || 'NOT_FOR_SALE'}
+                    </span>
+                    {cattle.sale?.status === 'OPEN_FOR_SALE' && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-pasture-100 text-pasture-800">
+                        Active in Marketplace
+                      </span>
+                    )}
+                    {cattle.sale?.status === 'SALE_PENDING' && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-alert-100 text-amber-alert-800">
+                        Sale Pending
+                      </span>
+                    )}
+                    {cattle.sale?.status === 'SOLD' && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-mist-200 text-ink-800">
+                        Sold
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {cattle.sale?.askingPrice > 0 && (
+                  <div className="text-left sm:text-right">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
+                      Listed Price
+                    </p>
+                    <p className="font-display font-bold text-xl text-pasture-700 mt-0.5">
+                      ₹{cattle.sale.askingPrice.toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Form to list or update sale */}
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!salePrice || Number(salePrice) <= 0) {
+                    toast.error('Please enter a valid asking price.');
+                    return;
+                  }
+                  setIsSubmittingSale(true);
+                  try {
+                    if (cattle.sale?.status && cattle.sale.status !== 'NOT_FOR_SALE' && cattle.sale.status !== 'REMOVED_FROM_SALE') {
+                      await marketplaceApi.updateSaleListing(cattle._id, {
+                        askingPrice: Number(salePrice),
+                        description: saleDesc,
+                        contactPhone: saleContactPhone,
+                        status: saleStatus,
+                      });
+                      toast.success('Marketplace listing updated.');
+                    } else {
+                      await marketplaceApi.listCowForSale(cattle._id, {
+                        askingPrice: Number(salePrice),
+                        description: saleDesc,
+                        contactPhone: saleContactPhone,
+                      });
+                      toast.success('Cow listed for sale in the marketplace!');
+                    }
+                    load();
+                  } catch (err) {
+                    toast.error(getErrorMessage(err, 'Failed to save sale listing.'));
+                  } finally {
+                    setIsSubmittingSale(false);
+                  }
+                }}
+                className="space-y-4 text-xs"
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-ink-700 font-medium mb-1">
+                      Asking Price (₹) *
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      value={salePrice}
+                      onChange={(e) => setSalePrice(e.target.value)}
+                      placeholder="e.g. 50000"
+                      className="w-full px-3 py-2.5 rounded-xl bg-white border border-mist-300 text-ink-900 focus:outline-none focus:ring-1 focus:ring-pasture-600 focus:border-pasture-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-ink-700 font-medium mb-1">
+                      Contact Phone for Buyers
+                    </label>
+                    <input
+                      type="tel"
+                      value={saleContactPhone}
+                      onChange={(e) => setSaleContactPhone(e.target.value)}
+                      placeholder="e.g. +91 9876543210"
+                      className="w-full px-3 py-2.5 rounded-xl bg-white border border-mist-300 text-ink-900 focus:outline-none focus:ring-1 focus:ring-pasture-600 focus:border-pasture-600"
+                    />
+                  </div>
+                </div>
+
+                {cattle.sale?.status && cattle.sale.status !== 'NOT_FOR_SALE' && cattle.sale.status !== 'REMOVED_FROM_SALE' && (
+                  <div>
+                    <label className="block text-ink-700 font-medium mb-1">
+                      Sale State
+                    </label>
+                    <select
+                      value={saleStatus}
+                      onChange={(e) => setSaleStatus(e.target.value)}
+                      className="w-full sm:w-1/2 px-3 py-2 rounded-xl bg-white border border-mist-300 text-ink-900 focus:outline-none focus:ring-1 focus:ring-pasture-600 focus:border-pasture-600"
+                    >
+                      <option value="OPEN_FOR_SALE">OPEN_FOR_SALE (Open for buyer inquiries)</option>
+                      <option value="SALE_PENDING">SALE_PENDING (Agreement reached)</option>
+                      <option value="SOLD">SOLD (Completed transaction)</option>
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-ink-700 font-medium mb-1">
+                    Cattle Notes & Description for Buyers
+                  </label>
+                  <textarea
+                    rows="3"
+                    value={saleDesc}
+                    onChange={(e) => setSaleDesc(e.target.value)}
+                    placeholder="Mention daily milk yield, lactation cycle, temperament, breeding history..."
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-mist-300 text-ink-900 focus:outline-none focus:ring-1 focus:ring-pasture-600 focus:border-pasture-600"
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSubmittingSale}
+                    className="px-5 py-2.5 rounded-xl bg-pasture-700 hover:bg-pasture-800 text-white font-medium shadow-xs disabled:opacity-50 transition-colors"
+                  >
+                    {isSubmittingSale
+                      ? 'Saving...'
+                      : ['OPEN_FOR_SALE', 'SALE_PENDING'].includes(cattle.sale?.status)
+                      ? 'Update Sale Details'
+                      : 'List Cow For Sale'}
+                  </button>
+
+                  {['OPEN_FOR_SALE', 'SALE_PENDING'].includes(cattle.sale?.status) && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!window.confirm('Remove this cow from the marketplace?')) return;
+                        try {
+                          await marketplaceApi.removeCowFromSale(cattle._id);
+                          toast.success('Listing removed from marketplace.');
+                          load();
+                        } catch (err) {
+                          toast.error(getErrorMessage(err, 'Failed to remove listing.'));
+                        }
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-rose-50 text-rose-800 hover:bg-rose-100 border border-rose-200 transition-colors"
+                    >
+                      Remove from Marketplace
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Floating AI Health Assistant (Grounded Mode: Farmer) */}
+      <AiAssistant
+        cattleId={cattle.cattleId}
+        cattleName={cattle.name}
+        mode="farmer"
+        initialOpen={false}
+      />
     </div>
   );
 }

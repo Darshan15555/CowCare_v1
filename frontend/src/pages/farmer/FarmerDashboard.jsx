@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../utils/errorMessage';
-import { PlusCircle, Stethoscope, Bell } from 'lucide-react';
+import { PlusCircle, Stethoscope, Bell, ShoppingBag } from 'lucide-react';
 import { cattleApi } from '../../api/cattleApi';
 import { requestApi } from '../../api/requestApi';
 import { SkeletonDashboard } from '../../components/common/Skeleton';
@@ -84,8 +84,9 @@ export default function FarmerDashboard() {
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <QuickAction to="/farmer/cattle/add" icon={PlusCircle} label="Add Cattle" />
+        <QuickAction to="/farmer/marketplace" icon={ShoppingBag} label="Marketplace" />
         <QuickAction to="/farmer/book" icon={Stethoscope} label="Book Vet Visit" />
         <QuickAction to="/farmer/notifications" icon={Bell} label="Notifications" />
       </div>

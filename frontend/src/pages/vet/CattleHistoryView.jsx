@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Stethoscope, Syringe, Pill, CalendarClock } from 'lucide-react';
 import { cattleApi } from '../../api/cattleApi';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import AiAssistant from '../../components/common/AiAssistant';
 import { CATTLE_STATUS } from '../../utils/constants';
 
 const EVENT_ICON = { VISIT: Stethoscope, VACCINATION: Syringe, TREATMENT: Pill, FOLLOW_UP: CalendarClock };
@@ -15,8 +16,11 @@ const EVENT_ICON_BG = {
 
 export default function CattleHistoryView() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const requestId = searchParams.get('requestId');
 
   useEffect(() => {
     cattleApi
@@ -184,6 +188,15 @@ export default function CattleHistoryView() {
         This is historical context only. Previous treatment does not determine today&apos;s clinical
         decision — that judgment belongs to you as the examining veterinarian.
       </p>
+
+      {/* Floating Clinical Co-Pilot for Veterinarian */}
+      <AiAssistant
+        cattleId={cattle.cattleId}
+        cattleName={cattle.name}
+        mode="veterinarian"
+        requestId={requestId}
+        initialOpen={false}
+      />
     </div>
   );
 }

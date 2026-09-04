@@ -68,6 +68,9 @@ const userSchema = new mongoose.Schema(
     // explicitly choose to be interrupted outside their normal hours.
     acceptsEmergencyOverride: { type: Boolean, default: false },
 
+    // Saved / Favorited Marketplace cattle listings
+    favorites: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Cattle' }],
+
     // Refresh token rotation (hashed, single active session per device simplification)
     refreshTokenHash: { type: String, select: false, default: null },
   },

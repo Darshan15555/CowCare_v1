@@ -33,6 +33,25 @@ const cattleSchema = new mongoose.Schema(
       default: 'HEALTHY',
     },
 
+    // Marketplace / Cow Sale capability
+    sale: {
+      status: {
+        type: String,
+        enum: ['NOT_FOR_SALE', 'OPEN_FOR_SALE', 'SALE_PENDING', 'SOLD', 'REMOVED_FROM_SALE'],
+        default: 'NOT_FOR_SALE',
+        index: true,
+      },
+      askingPrice: { type: Number, min: 0 },
+      description: { type: String, trim: true, maxlength: 1000 },
+      listedAt: { type: Date },
+      location: {
+        address: { type: String, trim: true },
+        lat: { type: Number },
+        lng: { type: Number },
+      },
+      contactPhone: { type: String, trim: true },
+    },
+
     // QR encodes ONLY the cattleId (see qrGenerator util). This stores the
     // rendered QR as a data URL for quick display without regeneration.
     qrCodeDataUrl: { type: String },
@@ -43,5 +62,6 @@ const cattleSchema = new mongoose.Schema(
 );
 
 cattleSchema.index({ ownerId: 1, isActive: 1 });
+cattleSchema.index({ 'sale.status': 1, breed: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Cattle', cattleSchema);

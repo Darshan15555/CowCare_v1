@@ -21,6 +21,8 @@ const { notifyUser } = require('./controllers/requestController');
 const medicalRoutes = require('./routes/medicalRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const marketplaceRoutes = require('./routes/marketplaceRoutes');
+const aiRoutes = require('./routes/aiRoutes');
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -81,6 +83,8 @@ app.use('/api/requests', requestRoutes);
 app.use('/api/medical', medicalRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/marketplace', marketplaceRoutes);
+app.use('/api/ai', aiRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -9,6 +9,7 @@ import { medicalApi } from '../../api/medicalApi';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import PriorityBadge from '../../components/common/PriorityBadge';
 import StatusBadge from '../../components/common/StatusBadge';
+import AiAssistant from '../../components/common/AiAssistant';
 
 const NEXT_STATUS_ACTION = {
   ON_THE_WAY: { next: 'ARRIVED', label: 'Mark Arrived' },
@@ -213,43 +214,44 @@ export default function VetRequestDetail() {
       </div>
 
       <Link
-        to={cattleObjectId ? `/vet/cattle/${cattleObjectId}` : '#'}
-        className="flex items-center justify-center gap-2 rounded-lg border border-mist-300 py-2.5 text-sm font-medium text-ink-700 hover:bg-mist-50"
+        to={cattleObjectId ? `/vet/cattle/${cattleObjectId}?requestId=${request._id}` : '#'}
+        className="flex items-center justify-center gap-2 rounded-xl border border-mist-300 py-3 text-sm font-semibold text-ink-700 hover:bg-mist-100 transition-colors shadow-xs"
       >
-        <History size={16} /> View Cow History
+        <History size={17} /> View Complete Cattle Medical History
       </Link>
 
       {/* Action buttons based on current status */}
       {request.status === 'REQUESTED' && (
-        <div className="space-y-2">
+        <div className="space-y-3 pt-1">
           <button
             onClick={() => handleTransition('ACCEPTED')}
             disabled={isActing}
-            className="w-full btn-pop py-2.5 text-sm disabled:opacity-60"
+            className="w-full py-3.5 px-4 rounded-xl bg-pasture-700 hover:bg-pasture-800 text-white font-bold text-sm shadow-md transition-all hover:scale-101 disabled:opacity-60"
           >
-            Accept Request
+            Accept Patient Request
           </button>
           {!showRejectForm ? (
             <button
               onClick={() => setShowRejectForm(true)}
-              className="w-full rounded-lg border border-vital-300 py-2.5 text-sm font-medium text-vital-600 hover:bg-vital-50"
+              className="w-full rounded-xl border border-vital-300 py-2.5 text-sm font-semibold text-vital-600 hover:bg-vital-50 transition-colors"
             >
-              Reject
+              Decline / Reject Case
             </button>
           ) : (
-            <div className="space-y-2 rounded-lg border border-vital-200 bg-vital-50 p-3">
+            <div className="space-y-3 rounded-2xl border border-vital-200 bg-vital-50 p-4">
               <textarea
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
-                placeholder="Reason for rejection"
-                className="input"
+                placeholder="Clinical reason for declining this request..."
+                className="w-full p-3 rounded-xl border border-vital-300 text-xs bg-white text-ink-800 focus:outline-none focus:ring-1 focus:ring-vital-500"
+                rows={3}
               />
               <button
                 onClick={() => handleTransition('REJECTED', { rejectionReason })}
                 disabled={isActing}
-                className="w-full rounded-lg bg-vital-600 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                className="w-full rounded-xl bg-vital-600 py-2.5 text-sm font-bold text-white hover:bg-vital-700 shadow-xs disabled:opacity-60"
               >
-                Confirm Rejection
+                Confirm Decline
               </button>
             </div>
           )}
@@ -257,20 +259,20 @@ export default function VetRequestDetail() {
       )}
 
       {request.status === 'ACCEPTED' && (
-        <div className="space-y-2">
+        <div className="space-y-3 pt-1">
           <button
             onClick={openNavigationAndDepart}
             disabled={isActing}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-serum-600 py-3 text-sm font-semibold text-white hover:bg-serum-700 disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-serum-700 hover:bg-serum-800 py-3.5 text-sm font-bold text-white shadow-md hover:scale-101 transition-all disabled:opacity-60"
           >
-            <Navigation size={16} /> Let&apos;s Go →
+            <Navigation size={18} /> Open Navigation & Depart (On The Way)
           </button>
           <button
             onClick={() => handleTransition('ON_THE_WAY')}
             disabled={isActing}
-            className="w-full text-center text-xs font-medium text-ink-500 hover:text-ink-700 disabled:opacity-60"
+            className="w-full py-2 text-center text-xs font-semibold text-ink-500 hover:text-ink-800 disabled:opacity-60"
           >
-            Already know the way — just mark as on the way
+            Already en route — Mark as On The Way
           </button>
         </div>
       )}
@@ -279,9 +281,9 @@ export default function VetRequestDetail() {
         <button
           onClick={() => handleTransition(action.next)}
           disabled={isActing}
-          className="w-full btn-pop py-2.5 text-sm disabled:opacity-60"
+          className="w-full py-3.5 px-4 rounded-xl bg-pasture-700 hover:bg-pasture-800 text-white font-bold text-sm shadow-md transition-all hover:scale-101 disabled:opacity-60"
         >
-          {isActing ? 'Updating...' : action.label}
+          {isActing ? 'Updating status...' : action.label}
         </button>
       )}
 
@@ -460,12 +462,20 @@ export default function VetRequestDetail() {
           <button
             type="submit"
             disabled={isCompleting}
-            className="w-full btn-pop py-2.5 text-sm disabled:opacity-60"
+            className="w-full py-3.5 px-4 rounded-xl bg-pasture-700 hover:bg-pasture-800 text-white font-bold text-sm shadow-md transition-all hover:scale-101 disabled:opacity-60"
           >
-            {isCompleting ? 'Saving...' : 'Complete Visit & Save to Timeline'}
+            {isCompleting ? 'Saving Clinical Exam & Vitals...' : 'Complete Visit & Save to Health Timeline'}
           </button>
         </form>
       )}
+
+      {/* Clinical AI Co-Pilot with Cattle Context */}
+      <AiAssistant
+        mode="veterinarian"
+        cattleId={cattleObjectId}
+        cattleName={request.cattleId?.name || request.cattleNameSnapshot}
+        requestId={id}
+      />
     </div>
   );
 }
