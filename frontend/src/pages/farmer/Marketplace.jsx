@@ -539,6 +539,9 @@ export default function Marketplace() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {cattleList.map((cow) => {
                 const statusCfg = CATTLE_STATUS[cow.status] || CATTLE_STATUS.HEALTHY;
+                const mainPhoto = cow.sale?.photos?.[0] || cow.photos?.[0] || cow.photoUrl;
+                const photosCount = cow.sale?.photos?.length || cow.photos?.length || (cow.photoUrl ? 1 : 0);
+
                 return (
                   <div
                     key={cow._id}
@@ -547,9 +550,9 @@ export default function Marketplace() {
                     {/* Top Image Container */}
                     <div className="relative aspect-4/3 bg-mist-100 overflow-hidden">
                       <Link to={`${detailBasePath}/${cow._id}`}>
-                        {cow.photoUrl ? (
+                        {mainPhoto ? (
                           <img
-                            src={cow.photoUrl}
+                            src={mainPhoto}
                             alt={cow.name}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           />
@@ -586,7 +589,11 @@ export default function Marketplace() {
                       <div className="absolute bottom-2.5 right-2.5">
                         <span className="px-2 py-0.5 rounded-md bg-ink-900/70 backdrop-blur-xs text-white text-[10px] font-sans font-medium flex items-center gap-1">
                           <Camera className="w-3 h-3 text-mist-200" />
-                          <span>{cow.photosCount || 1} Photo{cow.photosCount === 1 ? '' : 's'}</span>
+                          <span>
+                            {photosCount > 0
+                              ? `${photosCount} Photo${photosCount === 1 ? '' : 's'}`
+                              : 'No photo'}
+                          </span>
                         </span>
                       </div>
                     </div>
@@ -678,6 +685,8 @@ export default function Marketplace() {
             <div className="space-y-3">
               {cattleList.map((cow) => {
                 const statusCfg = CATTLE_STATUS[cow.status] || CATTLE_STATUS.HEALTHY;
+                const mainPhoto = cow.sale?.photos?.[0] || cow.photos?.[0] || cow.photoUrl;
+
                 return (
                   <div
                     key={cow._id}
@@ -685,8 +694,8 @@ export default function Marketplace() {
                   >
                     <div className="flex items-center gap-4 w-full sm:w-auto">
                       <div className="w-20 h-20 rounded-xl bg-mist-100 overflow-hidden shrink-0">
-                        {cow.photoUrl ? (
-                          <img src={cow.photoUrl} alt={cow.name} className="w-full h-full object-cover" />
+                        {mainPhoto ? (
+                          <img src={mainPhoto} alt={cow.name} className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-xl">🐄</div>
                         )}

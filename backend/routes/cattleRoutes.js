@@ -55,6 +55,7 @@ router.get('/:id', getCattleProfile);
 router.post(
   '/:id/sale',
   restrictTo('FARMER'),
+  upload.array('photos', 10),
   openForSaleValidators,
   validate,
   listCowForSale
@@ -62,6 +63,7 @@ router.post(
 router.patch(
   '/:id/sale',
   restrictTo('FARMER'),
+  upload.array('photos', 10),
   updateSaleStatusValidators,
   validate,
   updateSaleListing

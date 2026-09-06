@@ -1,7 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Copy, Stethoscope, Syringe, Pill, CalendarClock, Siren, ArrowRightLeft, ShoppingBag, Tag, Sparkles } from 'lucide-react';
+import {
+  Copy,
+  Stethoscope,
+  Syringe,
+  Pill,
+  CalendarClock,
+  Siren,
+  ArrowRightLeft,
+  ShoppingBag,
+  Tag,
+  Sparkles,
+  Camera,
+  Upload,
+  Plus,
+  Trash2,
+  CheckCircle2,
+  AlertCircle,
+  Image as ImageIcon,
+} from 'lucide-react';
 import { getErrorMessage } from '../../utils/errorMessage';
 import { cattleApi } from '../../api/cattleApi';
 import { marketplaceApi } from '../../api/marketplaceApi';
@@ -48,6 +66,16 @@ export default function CattleProfile() {
   const [saleStatus, setSaleStatus] = useState('OPEN_FOR_SALE');
   const [isSubmittingSale, setIsSubmittingSale] = useState(false);
 
+  // Multi-photo state for marketplace listing:
+  // Slot 1: Front Face (Mandatory)
+  const [frontFacePhoto, setFrontFacePhoto] = useState(null);
+  const [frontFacePreview, setFrontFacePreview] = useState('');
+  // Slot 2: Side Profile / Full Body (Mandatory)
+  const [sidePhoto, setSidePhoto] = useState(null);
+  const [sidePreview, setSidePreview] = useState('');
+  // Slot 3+: Additional Optional Photos
+  const [additionalPhotos, setAdditionalPhotos] = useState([]);
+
   const load = () => {
     cattleApi
       .getProfile(id)
@@ -58,6 +86,24 @@ export default function CattleProfile() {
           setSaleDesc(res.data.cattle.sale.description || '');
           setSaleContactPhone(res.data.cattle.sale.contactPhone || '');
           setSaleStatus(res.data.cattle.sale.status || 'OPEN_FOR_SALE');
+
+          const photos =
+            res.data.cattle.sale.photos ||
+            (res.data.cattle.photoUrl ? [res.data.cattle.photoUrl] : []);
+
+          if (photos.length > 0) {
+            setFrontFacePreview(photos[0]);
+          }
+          if (photos.length > 1) {
+            setSidePreview(photos[1]);
+          }
+          if (photos.length > 2) {
+            setAdditionalPhotos(
+              photos.slice(2).map((url) => ({ file: null, preview: url, isExisting: true }))
+            );
+          }
+        } else if (res.data?.cattle?.photoUrl) {
+          setFrontFacePreview(res.data.cattle.photoUrl);
         }
       })
       .finally(() => setIsLoading(false));
@@ -434,23 +480,75 @@ export default function CattleProfile() {
                     toast.error('Please enter a valid asking price.');
                     return;
                   }
+
+                  // When opening for sale or updating active sale, enforce at least 2 photos
+                  const isOpeningForSale =
+                    (!cattle.sale?.status ||
+                      cattle.sale.status === 'NOT_FOR_SALE' ||
+                      cattle.sale.status === 'REMOVED_FROM_SALE' ||
+                      saleStatus === 'OPEN_FOR_SALE');
+
+                  const hasFront = Boolean(frontFacePhoto || frontFacePreview);
+                  const hasSide = Boolean(sidePhoto || sidePreview);
+
+                  if (isOpeningForSale && (!hasFront || !hasSide)) {
+                    toast.error(
+                      'At least 2 photos are required to list for sale:\n1. Front face photo (Required)\n2. Side profile / full body photo (Required)'
+                    );
+                    return;
+                  }
+
                   setIsSubmittingSale(true);
                   try {
-                    if (cattle.sale?.status && cattle.sale.status !== 'NOT_FOR_SALE' && cattle.sale.status !== 'REMOVED_FROM_SALE') {
-                      await marketplaceApi.updateSaleListing(cattle._id, {
-                        askingPrice: Number(salePrice),
-                        description: saleDesc,
-                        contactPhone: saleContactPhone,
-                        status: saleStatus,
-                      });
+                    const formData = new FormData();
+                    formData.append('askingPrice', salePrice);
+                    formData.append('description', saleDesc);
+                    formData.append('contactPhone', saleContactPhone);
+                    if (saleStatus) {
+                      formData.append('status', saleStatus);
+                    }
+
+                    // Collect existing photos to retain
+                    const retainedExisting = [];
+                    if (!frontFacePhoto && frontFacePreview && frontFacePreview.startsWith('/')) {
+                      retainedExisting.push(frontFacePreview);
+                    }
+                    if (!sidePhoto && sidePreview && sidePreview.startsWith('/')) {
+                      retainedExisting.push(sidePreview);
+                    }
+                    additionalPhotos.forEach((item) => {
+                      if (!item.file && item.preview && item.preview.startsWith('/')) {
+                        retainedExisting.push(item.preview);
+                      }
+                    });
+
+                    if (retainedExisting.length > 0) {
+                      formData.append('existingPhotos', JSON.stringify(retainedExisting));
+                    }
+
+                    // Append new files in sequence: Slot 1 (Front), Slot 2 (Side), Slot 3+ (Additional)
+                    if (frontFacePhoto) {
+                      formData.append('photos', frontFacePhoto);
+                    }
+                    if (sidePhoto) {
+                      formData.append('photos', sidePhoto);
+                    }
+                    additionalPhotos.forEach((item) => {
+                      if (item.file) {
+                        formData.append('photos', item.file);
+                      }
+                    });
+
+                    if (
+                      cattle.sale?.status &&
+                      cattle.sale.status !== 'NOT_FOR_SALE' &&
+                      cattle.sale.status !== 'REMOVED_FROM_SALE'
+                    ) {
+                      await marketplaceApi.updateSaleListing(cattle._id, formData);
                       toast.success('Marketplace listing updated.');
                     } else {
-                      await marketplaceApi.listCowForSale(cattle._id, {
-                        askingPrice: Number(salePrice),
-                        description: saleDesc,
-                        contactPhone: saleContactPhone,
-                      });
-                      toast.success('Cow listed for sale in the marketplace!');
+                      await marketplaceApi.listCowForSale(cattle._id, formData);
+                      toast.success('Cow listed for sale in the marketplace with photos!');
                     }
                     load();
                   } catch (err) {
@@ -459,8 +557,253 @@ export default function CattleProfile() {
                     setIsSubmittingSale(false);
                   }
                 }}
-                className="space-y-4 text-xs"
+                className="space-y-5 text-xs"
               >
+                {/* Photo Upload Section: 2 Required (Front Face + Side View) + Optional Additional */}
+                <div className="rounded-2xl border border-mist-200 bg-mist-50/60 p-4 sm:p-5 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-mist-200 pb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Camera className="w-4 h-4 text-pasture-700" />
+                        <h3 className="font-display font-bold text-sm text-ink-900">
+                          Cattle Photos <span className="text-vital-600">*</span>
+                        </h3>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-pasture-100 text-pasture-800">
+                          Min. 2 Photos Required
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-ink-500 mt-0.5">
+                        First photo must be a clear front face view. Second photo must be a full-body side view. Add more optional photos to show udder, markings, or pedigree.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Photo Slots Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    {/* Slot 1: Front Face View (Mandatory) */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-semibold text-ink-800 flex items-center gap-1">
+                          <span>1. Front Face View</span>
+                          <span className="text-vital-600 font-bold">*</span>
+                        </span>
+                        {frontFacePreview && (
+                          <span className="text-[10px] text-pasture-700 font-bold flex items-center gap-0.5">
+                            <CheckCircle2 className="w-3 h-3" /> Ready
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="relative aspect-4/3 rounded-xl border-2 border-dashed border-mist-300 bg-white hover:border-pasture-600 transition-colors overflow-hidden flex flex-col items-center justify-center text-center p-3 group">
+                        {frontFacePreview ? (
+                          <>
+                            <img
+                              src={frontFacePreview}
+                              alt="Front Face View"
+                              className="w-full h-full object-cover rounded-lg"
+                            />
+                            <div className="absolute inset-0 bg-ink-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2">
+                              <label className="cursor-pointer px-3 py-1.5 rounded-lg bg-white text-ink-900 font-semibold text-[11px] shadow-sm hover:bg-mist-100">
+                                Replace Photo
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      setFrontFacePhoto(file);
+                                      setFrontFacePreview(URL.createObjectURL(file));
+                                    }
+                                  }}
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setFrontFacePhoto(null);
+                                  setFrontFacePreview('');
+                                }}
+                                className="px-3 py-1 rounded-lg bg-vital-600 text-white font-medium text-[10px] hover:bg-vital-700"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                            <span className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded bg-ink-900/75 text-white text-[9px] font-bold">
+                              Front Face (Main)
+                            </span>
+                          </>
+                        ) : (
+                          <label className="w-full h-full cursor-pointer flex flex-col items-center justify-center gap-1.5">
+                            <div className="w-9 h-9 rounded-full bg-pasture-50 text-pasture-700 flex items-center justify-center">
+                              <Camera className="w-5 h-5" />
+                            </div>
+                            <span className="font-semibold text-ink-800 text-xs">
+                              Upload Front Face
+                            </span>
+                            <span className="text-[10px] text-ink-400">
+                              Clear face & horns shot
+                            </span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  setFrontFacePhoto(file);
+                                  setFrontFacePreview(URL.createObjectURL(file));
+                                }
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Slot 2: Side Profile / Full Body (Mandatory) */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-semibold text-ink-800 flex items-center gap-1">
+                          <span>2. Side Profile / Full Body</span>
+                          <span className="text-vital-600 font-bold">*</span>
+                        </span>
+                        {sidePreview && (
+                          <span className="text-[10px] text-pasture-700 font-bold flex items-center gap-0.5">
+                            <CheckCircle2 className="w-3 h-3" /> Ready
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="relative aspect-4/3 rounded-xl border-2 border-dashed border-mist-300 bg-white hover:border-pasture-600 transition-colors overflow-hidden flex flex-col items-center justify-center text-center p-3 group">
+                        {sidePreview ? (
+                          <>
+                            <img
+                              src={sidePreview}
+                              alt="Side Profile View"
+                              className="w-full h-full object-cover rounded-lg"
+                            />
+                            <div className="absolute inset-0 bg-ink-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2">
+                              <label className="cursor-pointer px-3 py-1.5 rounded-lg bg-white text-ink-900 font-semibold text-[11px] shadow-sm hover:bg-mist-100">
+                                Replace Photo
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      setSidePhoto(file);
+                                      setSidePreview(URL.createObjectURL(file));
+                                    }
+                                  }}
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSidePhoto(null);
+                                  setSidePreview('');
+                                }}
+                                className="px-3 py-1 rounded-lg bg-vital-600 text-white font-medium text-[10px] hover:bg-vital-700"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                            <span className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded bg-ink-900/75 text-white text-[9px] font-bold">
+                              Side View
+                            </span>
+                          </>
+                        ) : (
+                          <label className="w-full h-full cursor-pointer flex flex-col items-center justify-center gap-1.5">
+                            <div className="w-9 h-9 rounded-full bg-pasture-50 text-pasture-700 flex items-center justify-center">
+                              <ImageIcon className="w-5 h-5" />
+                            </div>
+                            <span className="font-semibold text-ink-800 text-xs">
+                              Upload Side Profile
+                            </span>
+                            <span className="text-[10px] text-ink-400">
+                              Full length body view
+                            </span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  setSidePhoto(file);
+                                  setSidePreview(URL.createObjectURL(file));
+                                }
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Slot 3+: Additional Optional Photos */}
+                    {additionalPhotos.map((item, idx) => (
+                      <div key={idx} className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-medium text-ink-600">
+                            Optional Photo {idx + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAdditionalPhotos((prev) => prev.filter((_, i) => i !== idx));
+                            }}
+                            className="text-vital-600 hover:text-vital-800 text-[11px] flex items-center gap-0.5"
+                            title="Remove photo"
+                          >
+                            <Trash2 className="w-3 h-3" /> Remove
+                          </button>
+                        </div>
+                        <div className="relative aspect-4/3 rounded-xl border border-mist-200 bg-white overflow-hidden">
+                          <img
+                            src={item.preview}
+                            alt={`Optional Photo ${idx + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Add More Optional Photos Button */}
+                    <div className="space-y-1.5">
+                      <span className="text-[11px] font-medium text-ink-500">
+                        Add More (Optional)
+                      </span>
+                      <label className="aspect-4/3 rounded-xl border-2 border-dashed border-mist-300 bg-white hover:border-pasture-600 transition-colors flex flex-col items-center justify-center text-center p-3 cursor-pointer group">
+                        <div className="w-9 h-9 rounded-full bg-mist-100 group-hover:bg-pasture-50 text-ink-500 group-hover:text-pasture-700 flex items-center justify-center transition-colors">
+                          <Plus className="w-5 h-5" />
+                        </div>
+                        <span className="font-semibold text-ink-700 text-xs mt-1 group-hover:text-pasture-800">
+                          Add Optional Photo
+                        </span>
+                        <span className="text-[10px] text-ink-400">
+                          Rear view, udder, markings...
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setAdditionalPhotos((prev) => [
+                                ...prev,
+                                { file, preview: URL.createObjectURL(file), isExisting: false },
+                              ]);
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-ink-700 font-medium mb-1">

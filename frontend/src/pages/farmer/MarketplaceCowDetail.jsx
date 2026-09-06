@@ -19,6 +19,9 @@ import {
   Share2,
   AlertTriangle,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Camera,
 } from 'lucide-react';
 import { marketplaceApi } from '../../api/marketplaceApi';
 import { getErrorMessage } from '../../utils/errorMessage';
@@ -45,6 +48,7 @@ export default function MarketplaceCowDetail() {
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [activePhotoIdx, setActivePhotoIdx] = useState(0);
 
   // Edit listing modal state for owner
   const [isEditing, setIsEditing] = useState(false);
@@ -133,6 +137,17 @@ export default function MarketplaceCowDetail() {
   const statusCfg = CATTLE_STATUS[cattle.status] || CATTLE_STATUS.HEALTHY;
   const vaccinations = timeline.filter((e) => e.eventType === 'VACCINATION');
 
+  const allPhotos =
+    cattle.sale?.photos && cattle.sale.photos.length > 0
+      ? cattle.sale.photos
+      : cattle.photos && cattle.photos.length > 0
+      ? cattle.photos
+      : cattle.photoUrl
+      ? [cattle.photoUrl]
+      : [];
+
+  const currentPhoto = allPhotos[activePhotoIdx] || allPhotos[0] || null;
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
       {/* Top Navigation */}
@@ -165,21 +180,24 @@ export default function MarketplaceCowDetail() {
 
       {/* Main Passport Header Card */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-mist-200 flex flex-col lg:flex-row gap-8">
-        {/* Photo Container */}
+        {/* Photo & Gallery Container */}
         <div className="w-full lg:w-96 shrink-0 space-y-3">
-          <div className="relative aspect-4/3 rounded-2xl overflow-hidden bg-mist-100 border border-mist-200">
-            {cattle.photoUrl ? (
+          {/* Main Photo Card */}
+          <div className="relative aspect-4/3 rounded-2xl overflow-hidden bg-mist-100 border border-mist-200 group">
+            {currentPhoto ? (
               <img
-                src={cattle.photoUrl}
-                alt={cattle.name}
-                className="w-full h-full object-cover"
+                src={currentPhoto}
+                alt={`${cattle.name} - Photo ${activePhotoIdx + 1}`}
+                className="w-full h-full object-cover transition-all duration-300"
               />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center text-ink-400">
                 <ShieldCheck className="w-12 h-12 opacity-30 mb-2" />
-                <span className="text-xs">No photo available</span>
+                <span className="text-xs">No photos available</span>
               </div>
             )}
+
+            {/* Top Left: Health Status */}
             <div className="absolute top-3 left-3">
               <span
                 className={`px-2.5 py-1 rounded-full text-xs font-medium shadow-xs ${statusCfg.badgeClass}`}
@@ -187,14 +205,94 @@ export default function MarketplaceCowDetail() {
                 {statusCfg.label}
               </span>
             </div>
-            {cattle.sale?.status === 'SALE_PENDING' && (
-              <div className="absolute top-3 right-3">
-                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-alert-500 text-white uppercase tracking-wider shadow-xs">
+
+            {/* Top Right: Photos Counter / Sale Pending */}
+            <div className="absolute top-3 right-3 flex items-center gap-1.5">
+              {cattle.sale?.status === 'SALE_PENDING' && (
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-alert-500 text-white uppercase tracking-wider shadow-xs">
                   Sale Pending
+                </span>
+              )}
+              {allPhotos.length > 1 && (
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-ink-950/75 backdrop-blur-xs text-white shadow-xs">
+                  {activePhotoIdx + 1} / {allPhotos.length}
+                </span>
+              )}
+            </div>
+
+            {/* Navigation Arrows if multiple photos */}
+            {allPhotos.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setActivePhotoIdx((prev) => (prev > 0 ? prev - 1 : allPhotos.length - 1))
+                  }
+                  className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-ink-900/60 hover:bg-ink-900/85 text-white transition-all shadow-md opacity-80 group-hover:opacity-100"
+                  title="Previous photo"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setActivePhotoIdx((prev) => (prev < allPhotos.length - 1 ? prev + 1 : 0))
+                  }
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-ink-900/60 hover:bg-ink-900/85 text-white transition-all shadow-md opacity-80 group-hover:opacity-100"
+                  title="Next photo"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </>
+            )}
+
+            {/* Bottom Tag: Photo Slot Description */}
+            {allPhotos.length > 0 && (
+              <div className="absolute bottom-3 left-3">
+                <span className="px-2.5 py-1 rounded-md bg-ink-950/75 backdrop-blur-xs text-white text-[10px] font-bold shadow-xs">
+                  {activePhotoIdx === 0
+                    ? '1. Front Face View (Primary)'
+                    : activePhotoIdx === 1
+                    ? '2. Side Profile / Full Body'
+                    : `Optional Photo ${activePhotoIdx + 1}`}
                 </span>
               </div>
             )}
           </div>
+
+          {/* Interactive Thumbnails Row for Optional & Additional Photos */}
+          {allPhotos.length > 1 && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] text-ink-500 font-medium px-0.5">
+                <span>All Photos ({allPhotos.length})</span>
+                <span className="text-[10px] text-ink-400">Click to preview</span>
+              </div>
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                {allPhotos.map((url, idx) => {
+                  const isSelected = activePhotoIdx === idx;
+                  const label =
+                    idx === 0 ? 'Front Face' : idx === 1 ? 'Side Body' : `Optional ${idx + 1}`;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setActivePhotoIdx(idx)}
+                      className={`group relative h-16 w-16 sm:h-20 sm:w-20 rounded-xl overflow-hidden shrink-0 border-2 transition-all ${
+                        isSelected
+                          ? 'border-pasture-700 ring-2 ring-pasture-700/30 scale-102 shadow-sm'
+                          : 'border-mist-200 hover:border-mist-400 opacity-75 hover:opacity-100'
+                      }`}
+                    >
+                      <img src={url} alt={label} className="w-full h-full object-cover" />
+                      <span className="absolute bottom-0 inset-x-0 bg-ink-950/80 text-white text-[8px] font-bold py-0.5 truncate text-center leading-tight">
+                        {label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Cattle Permanent ID Pill */}
           <div className="flex items-center justify-between p-3 rounded-xl bg-mist-50 border border-mist-200">

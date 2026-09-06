@@ -17,6 +17,7 @@ const {
   openForSaleValidators,
   updateSaleStatusValidators,
 } = require('../validators/marketplaceValidators');
+const upload = require('../middleware/upload');
 
 // All marketplace routes require authentication
 router.use(protect);
@@ -35,8 +36,8 @@ router.get('/cows', getMarketplaceCattle);
 router.get('/cows/:id', getMarketplaceCowProfile);
 
 // Convenient alias endpoints for listing/updating cattle sale status
-router.post('/cows/:id/sale', restrictTo('FARMER'), openForSaleValidators, validate, listCowForSale);
-router.patch('/cows/:id/sale', restrictTo('FARMER'), updateSaleStatusValidators, validate, updateSaleListing);
+router.post('/cows/:id/sale', restrictTo('FARMER'), upload.array('photos', 10), openForSaleValidators, validate, listCowForSale);
+router.patch('/cows/:id/sale', restrictTo('FARMER'), upload.array('photos', 10), updateSaleStatusValidators, validate, updateSaleListing);
 router.delete('/cows/:id/sale', restrictTo('FARMER'), removeCowFromSale);
 
 module.exports = router;

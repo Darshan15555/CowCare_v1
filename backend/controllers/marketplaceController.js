@@ -5,6 +5,7 @@ const User = require('../models/User');
 const { canTransitionSale } = require('../utils/saleStateMachine');
 
 // @route POST /api/cattle/:id/sale
+// @route POST /api/cattle/:id/sale
 // @access Private (Owner FARMER only)
 const listCowForSale = asyncHandler(async (req, res) => {
   const { askingPrice, description, contactPhone, location } = req.body;
@@ -27,6 +28,33 @@ const listCowForSale = asyncHandler(async (req, res) => {
     throw new Error(`Cannot list cow for sale from current status "${currentStatus}".`);
   }
 
+  // Process uploaded photos
+  const uploadedUrls = (req.files || []).map((f) => `/uploads/${f.filename}`);
+  let existingUrls = [];
+  if (req.body.existingPhotos) {
+    try {
+      existingUrls = typeof req.body.existingPhotos === 'string'
+        ? JSON.parse(req.body.existingPhotos)
+        : req.body.existingPhotos;
+    } catch {
+      existingUrls = [req.body.existingPhotos].filter(Boolean);
+    }
+  } else if (cattle.sale?.photos?.length) {
+    existingUrls = cattle.sale.photos;
+  } else if (cattle.photoUrl) {
+    existingUrls = [cattle.photoUrl];
+  }
+
+  const allPhotos = [...uploadedUrls, ...existingUrls].filter(Boolean);
+
+  // Enforce at least 2 photos: 1st must be Front Face, 2nd Side/Full Body, then optional more
+  if (allPhotos.length < 2) {
+    res.status(400);
+    throw new Error(
+      'To list a cow for sale, you must upload at least 2 photos: 1. Front face photo, and 2. Side profile / full body photo. Additional optional photos can also be added.'
+    );
+  }
+
   cattle.sale = {
     status: 'OPEN_FOR_SALE',
     askingPrice: Number(askingPrice),
@@ -38,13 +66,18 @@ const listCowForSale = asyncHandler(async (req, res) => {
       lat: req.user.defaultLocation?.lat,
       lng: req.user.defaultLocation?.lng,
     },
+    photos: allPhotos,
   };
+
+  // The 1st photo (Front Face) is the primary photoUrl across the entire platform
+  cattle.photoUrl = allPhotos[0];
+  cattle.photos = allPhotos;
 
   await cattle.save();
 
   res.json({
     success: true,
-    message: `${cattle.name} (${cattle.cattleId}) is now listed for sale in the marketplace.`,
+    message: `${cattle.name} (${cattle.cattleId}) is now listed for sale with ${allPhotos.length} verified photos.`,
     cattle,
   });
 });
@@ -71,12 +104,40 @@ const updateSaleListing = asyncHandler(async (req, res) => {
     throw new Error('This cow is not currently listed for sale.');
   }
 
+  // Process photos if files are attached or existingPhotos specified
+  const uploadedUrls = (req.files || []).map((f) => `/uploads/${f.filename}`);
+  let currentPhotos = cattle.sale?.photos || [];
+  if (req.body.existingPhotos !== undefined) {
+    try {
+      currentPhotos = typeof req.body.existingPhotos === 'string'
+        ? JSON.parse(req.body.existingPhotos)
+        : req.body.existingPhotos;
+    } catch {
+      currentPhotos = [req.body.existingPhotos].filter(Boolean);
+    }
+  }
+
+  const updatedPhotos = [...uploadedUrls, ...currentPhotos].filter(Boolean);
+  if (updatedPhotos.length > 0) {
+    cattle.sale.photos = updatedPhotos;
+    cattle.photoUrl = updatedPhotos[0];
+    cattle.photos = updatedPhotos;
+  }
+
   // If status change requested, enforce state machine transitions
   if (status && status !== cattle.sale.status) {
     if (!canTransitionSale(cattle.sale.status, status)) {
       res.status(400);
       throw new Error(`Cannot transition sale status from "${cattle.sale.status}" to "${status}".`);
     }
+
+    if (status === 'OPEN_FOR_SALE' && (cattle.sale.photos?.length || 0) < 2) {
+      res.status(400);
+      throw new Error(
+        'To open this cow for sale, at least 2 photos (Front face and Side/Full body) are required.'
+      );
+    }
+
     cattle.sale.status = status;
   }
 

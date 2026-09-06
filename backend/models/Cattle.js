@@ -26,6 +26,7 @@ const cattleSchema = new mongoose.Schema(
     color: { type: String, trim: true },
     identifyingMarks: { type: String, trim: true },
     photoUrl: { type: String, default: null },
+    photos: [{ type: String }],
 
     status: {
       type: String,
@@ -50,6 +51,7 @@ const cattleSchema = new mongoose.Schema(
         lng: { type: Number },
       },
       contactPhone: { type: String, trim: true },
+      photos: [{ type: String }],
     },
 
     // QR encodes ONLY the cattleId (see qrGenerator util). This stores the

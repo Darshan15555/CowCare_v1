@@ -29,6 +29,14 @@ export function SocketProvider({ children }) {
       path: '/socket.io',
       auth: { token },
       withCredentials: true,
+      // A backend restart briefly resets the proxied WebSocket. Keep retrying
+      // with a bounded backoff instead of leaving the notification layer dead.
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1_000,
+      reconnectionDelayMax: 5_000,
+      randomizationFactor: 0.5,
+      timeout: 10_000,
     });
 
     socket.on('notification', (notification) => {
