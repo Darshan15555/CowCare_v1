@@ -466,6 +466,8 @@ const requestOwnership = asyncHandler(async (req, res) => {
     cattleNameSnapshot: cattle.name,
     fromOwnerId: cattle.ownerId,
     toOwnerId: req.user._id,
+    requestType: 'BUYER_REQUEST',
+    initiatedBy: req.user._id,
     status: 'PENDING',
   });
 
@@ -530,6 +532,16 @@ const getMarketplaceCowProfile = asyncHandler(async (req, res) => {
     }).select('status createdAt');
   }
 
+  // Check if the current user (owner/seller) has a pending ownership request from a buyer
+  let ownerPendingTransfer = null;
+  if (isOwner) {
+    ownerPendingTransfer = await CattleTransfer.findOne({
+      cattleId: cattle._id,
+      fromOwnerId: req.user._id,
+      status: 'PENDING',
+    }).populate('toOwnerId', 'name phone');
+  }
+
   res.json({
     success: true,
     cattle: {
@@ -539,6 +551,7 @@ const getMarketplaceCowProfile = asyncHandler(async (req, res) => {
     timeline,
     isOwner,
     buyerTransfer,
+    ownerPendingTransfer,
   });
 });
 

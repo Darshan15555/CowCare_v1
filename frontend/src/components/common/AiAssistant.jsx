@@ -6,6 +6,99 @@ import { getErrorMessage } from '../../utils/errorMessage';
 import farmerAvatar from '../../assets/ai_farmer_avatar.jpg';
 import doctorAvatar from '../../assets/ai_doctor_avatar.jpg';
 
+/**
+ * Lightweight markdown renderer for AI chat messages.
+ * Handles: ### headers, **bold**, *italic*, - bullet lists, and newlines.
+ */
+function MarkdownText({ text }) {
+  if (!text) return null;
+
+  const lines = text.split('\n');
+  const elements = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+
+    // Skip empty lines but preserve spacing
+    if (line.trim() === '') {
+      elements.push(<div key={i} className="h-2" />);
+      continue;
+    }
+
+    // Headers: ### → h3, ## → h2
+    if (line.startsWith('### ')) {
+      elements.push(
+        <h3 key={i} className="text-sm font-bold text-ink-900 mt-1 mb-1">
+          {renderInline(line.slice(4))}
+        </h3>
+      );
+      continue;
+    }
+    if (line.startsWith('## ')) {
+      elements.push(
+        <h2 key={i} className="text-sm font-bold text-ink-900 mt-2 mb-1">
+          {renderInline(line.slice(3))}
+        </h2>
+      );
+      continue;
+    }
+
+    // Bullet points: - item or * item
+    if (/^\s*[-*]\s+/.test(line)) {
+      const content = line.replace(/^\s*[-*]\s+/, '');
+      elements.push(
+        <div key={i} className="flex gap-1.5 ml-1 my-0.5">
+          <span className="text-pasture-600 shrink-0 mt-0.5">•</span>
+          <span>{renderInline(content)}</span>
+        </div>
+      );
+      continue;
+    }
+
+    // Regular paragraph
+    elements.push(
+      <p key={i} className="my-0.5">
+        {renderInline(line)}
+      </p>
+    );
+  }
+
+  return <>{elements}</>;
+}
+
+/** Renders inline markdown: **bold**, *italic* */
+function renderInline(text) {
+  if (!text) return text;
+  // Split by **bold** and *italic* patterns
+  const parts = [];
+  // Match **bold** or *italic* segments
+  const regex = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    // Add text before the match
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    if (match[2]) {
+      // **bold**
+      parts.push(<strong key={match.index} className="font-semibold text-ink-900">{match[2]}</strong>);
+    } else if (match[3]) {
+      // *italic*
+      parts.push(<em key={match.index}>{match[3]}</em>);
+    }
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : text;
+}
+
 const LANGUAGE_LABELS = {
   en: 'English',
   kn: 'ಕನ್ನಡ',
@@ -388,7 +481,7 @@ export default function AiAssistant({
                         : 'bg-white text-ink-800 border border-mist-200 rounded-bl-xs shadow-xs whitespace-pre-line'
                     }`}
                   >
-                    {msg.text}
+                    <MarkdownText text={msg.text} />
 
                     {msg.isError && lastFailedQuery && (
                       <button

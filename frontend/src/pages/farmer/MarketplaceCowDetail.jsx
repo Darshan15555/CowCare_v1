@@ -24,8 +24,11 @@ import {
   Camera,
   Handshake,
   Loader2,
+  Check,
+  X,
 } from 'lucide-react';
 import { marketplaceApi } from '../../api/marketplaceApi';
+import { cattleApi } from '../../api/cattleApi';
 import { getErrorMessage } from '../../utils/errorMessage';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import StatusBadge from '../../components/common/StatusBadge';
@@ -61,6 +64,32 @@ export default function MarketplaceCowDetail() {
 
   // Ownership request state for buyer
   const [isRequesting, setIsRequesting] = useState(false);
+
+  // Ownership request respond state for owner
+  const [isRespondingTransfer, setIsRespondingTransfer] = useState(false);
+
+  const ownerPendingTransfer = data?.ownerPendingTransfer;
+
+  const handleRespondTransfer = async (transferId, action) => {
+    const isAccept = action === 'ACCEPT';
+    const buyerName = ownerPendingTransfer?.toOwnerId?.name || 'the buyer';
+    const confirmMsg = isAccept
+      ? `Accept ownership transfer of ${cattle.name} to ${buyerName}? Ownership will transfer immediately and this listing will be marked as SOLD.`
+      : `Decline ownership request from ${buyerName}? This cow will remain open for sale.`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsRespondingTransfer(true);
+    try {
+      await cattleApi.respondToTransfer(transferId, action);
+      toast.success(isAccept ? 'Transfer accepted! Cattle ownership transferred.' : 'Transfer request declined.');
+      loadProfile();
+    } catch (err) {
+      toast.error(getErrorMessage(err, `Could not ${action.toLowerCase()} transfer.`));
+    } finally {
+      setIsRespondingTransfer(false);
+    }
+  };
 
   const loadProfile = async () => {
     setIsLoading(true);
@@ -413,6 +442,54 @@ export default function MarketplaceCowDetail() {
               </a>
             )}
           </div>
+
+          {/* Owner Pending Ownership Request Card — visible to owner with both Accept & Reject buttons */}
+          {isOwner && ownerPendingTransfer && ownerPendingTransfer.status === 'PENDING' && (
+            <div className="p-4 sm:p-5 rounded-2xl border-2 border-amber-alert-400 bg-gradient-to-br from-amber-alert-50 via-orange-50 to-amber-alert-100 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-amber-alert-500 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                    <Handshake className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-alert-200 text-amber-alert-900 text-[11px] font-bold mb-1">
+                      <span className="w-2 h-2 rounded-full bg-amber-alert-600 animate-pulse" />
+                      Ownership Request Received
+                    </div>
+                    <p className="text-sm font-bold text-ink-900">
+                      {ownerPendingTransfer.toOwnerId?.name || 'Buyer'} wants to purchase {cattle.name}
+                    </p>
+                    <p className="text-xs text-ink-600 mt-0.5">
+                      Buyer Phone: {ownerPendingTransfer.toOwnerId?.phone ? (
+                        <a href={`tel:${ownerPendingTransfer.toOwnerId?.phone}`} className="font-semibold text-pasture-700 underline font-data">
+                          {ownerPendingTransfer.toOwnerId?.phone}
+                        </a>
+                      ) : 'N/A'} · Once you have completed the deal and received payment, confirm transfer below:
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => handleRespondTransfer(ownerPendingTransfer._id, 'ACCEPT')}
+                    disabled={isRespondingTransfer}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-pasture-600 hover:bg-pasture-700 text-white font-semibold text-xs shadow-md hover:shadow-lg transition-all disabled:opacity-50"
+                  >
+                    <Check size={16} />
+                    <span>{isRespondingTransfer ? 'Processing...' : 'Accept'}</span>
+                  </button>
+                  <button
+                    onClick={() => handleRespondTransfer(ownerPendingTransfer._id, 'REJECT')}
+                    disabled={isRespondingTransfer}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-vital-400 bg-white hover:bg-vital-50 text-vital-600 font-semibold text-xs shadow-xs transition-all disabled:opacity-50"
+                  >
+                    <X size={16} />
+                    <span>{isRespondingTransfer ? 'Processing...' : 'Reject'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Request Ownership — visible only to non-owner farmers */}
           {!isOwner && user?.role === 'FARMER' && ['OPEN_FOR_SALE', 'SALE_PENDING'].includes(cattle.sale?.status) && (

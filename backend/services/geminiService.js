@@ -83,52 +83,362 @@ ACTIVE CURRENT CASE CONTEXT (Chief Complaint):
 }
 
 /**
- * Deterministic fallback generator if GEMINI_API_KEY is not configured or service is unreachable
+ * Intelligent dynamic question analyzer for offline / fallback mode.
+ * Answers specific queries about milk, vaccines, diseases, feeding, pregnancy, etc.
  */
-function generateFallbackSummary(cattle, timeline, mode, question) {
-  const eventCount = timeline.length;
-  const recentEvents = timeline.slice(0, 3);
+function answerDynamicQuestion(question, cattle, timeline, mode, language = 'en') {
+  if (!question || typeof question !== 'string' || question.trim().length === 0) {
+    return null;
+  }
 
+  const q = question.toLowerCase().trim();
+  const lang = LANGUAGE_CONFIG[language] ? language : 'en';
+  const greeting = LANGUAGE_CONFIG[lang]?.greeting || 'Namaste';
+  const name = cattle.name || 'Cattle';
+  const breed = cattle.breed || 'Indigenous';
+  const gender = cattle.gender === 'FEMALE' ? 'Female Cow 🐄' : 'Male Bull 🐂';
+  const age = cattle.estimatedAgeYears || 4;
+  const isFemale = cattle.gender === 'FEMALE';
+
+  // 1. MILK YIELD & PRODUCTION
+  if (q.includes('milk') || q.includes('yield') || q.includes('dairy') || q.includes('ಹಾಲು') || q.includes('பால்') || q.includes('दूध') || q.includes('పాలు')) {
+    if (!isFemale) {
+      return `### 🥛 Milk Production Query — ${name}\n\n${greeting}! **${name}** is registered as a **male bull/bullock**. Milk yield is not applicable for male animals. Bulls are utilized for breeding, draught purposes, or farming labor.`;
+    }
+
+    const pastMastitis = timeline.filter((e) => (e.diagnosis || '').toLowerCase().includes('mastitis') || (e.clinicalObservations || '').toLowerCase().includes('mastitis'));
+
+    let breedYield = '10 – 14 Liters/day';
+    if (breed.toLowerCase().includes('gir')) breedYield = '12 – 16 Liters/day';
+    else if (breed.toLowerCase().includes('sahiwal')) breedYield = '14 – 18 Liters/day';
+    else if (breed.toLowerCase().includes('red sindhi')) breedYield = '12 – 15 Liters/day';
+    else if (breed.toLowerCase().includes('hf') || breed.toLowerCase().includes('holstein')) breedYield = '20 – 30 Liters/day';
+    else if (breed.toLowerCase().includes('jersey')) breedYield = '15 – 22 Liters/day';
+    else if (breed.toLowerCase().includes('murrah')) breedYield = '14 – 20 Liters/day';
+
+    return `### 🥛 Milk Yield & Lactation Analysis — ${name} (${breed})
+
+${greeting}! Here is the specific milk production analysis for **${name}**:
+
+- **Breed Benchmark:** Purebred ${breed} cows typically yield approximately **${breedYield}** under optimal nutrition and management.
+- **Udder & Teat Health:** ${pastMastitis.length > 0 ? `⚠️ **Attention:** There are ${pastMastitis.length} past mastitis event(s) recorded. Inspect all four teats carefully before purchase to ensure no quarter is blind or fibrosed.` : `✅ **Clear:** No past mastitis or teat infections documented on CowCare ledger.`}
+- **Peak Lactation Advice:** Highest milk yield occurs between 40 to 70 days post-calving.
+- **Nutrition for Higher Yield:**
+  - Provide 1 kg of balanced concentrate feed for every 2.5–3 liters of milk produced.
+  - Include 25–30 kg of green fodder (Napier/Co-4, Maize) + 5 kg dry straw daily.
+  - Mix 50g of quality mineral mixture + 30g salt daily to prevent milk fever and maintain fat percentage.
+- **Seller Verification:** Always request the seller to demonstrate at least two consecutive morning and evening milkings in your presence.`;
+  }
+
+  // 2. VACCINATION & DISEASE SCHEDULE
+  if (q.includes('vaccin') || q.includes('fmd') || q.includes('hs') || q.includes('bq') || q.includes('brucell') || q.includes('lumpy') || q.includes('ಲಸಿಕೆ') || q.includes('தடுப்பூசி') || q.includes('टीका') || q.includes('టీకా')) {
+    const vaxEvents = timeline.filter((e) => e.eventType === 'VACCINATION');
+
+    return `### 💉 Vaccination & Immunization Status — ${name}
+
+${greeting}! Here is the detailed vaccination analysis for **${name}**:
+
+- **Recorded Vaccinations on CowCare:** ${vaxEvents.length} verified vaccination(s).
+${vaxEvents.length > 0 ? vaxEvents.map((v) => `  - ${new Date(v.eventDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })}: ${v.treatment?.[0]?.name || v.clinicalObservations || 'Vaccine administered'} (by ${v.veterinarianId?.name || 'Verified Vet'})`).join('\n') : '  - ⚠️ No vaccinations currently logged in the electronic registry. Always verify physical records with the seller.'}
+
+**Essential Annual Indian Dairy Cattle Vaccination Schedule:**
+1. **FMD (Foot and Mouth Disease / ಕಾಲುಬಾಯಿ ರೋಗ):** Given every 6 months (September & March).
+2. **HS (Haemorrhagic Septicaemia / ಘಟಸರ್ಪ):** Annual pre-monsoon dose (May – June).
+3. **BQ (Black Quarter / ಕಪ್ಪುಕಾಲಿನ ರೋಗ):** Annual pre-monsoon dose (May – June).
+4. **Brucellosis (ಬ್ರೂಸೆಲ್ಲೋಸಿಸ್):** Once in lifetime for female calves (4–8 months of age).
+5. **Deworming (ಹುಳು ನಿವಾರಣೆ):** Administer Albendazole or Fenbendazole every 3–4 months.`;
+  }
+
+  // 3. MASTITIS & UDDER HEALTH
+  if (q.includes('mastitis') || q.includes('udder') || q.includes('teat') || q.includes('ಮಡಿ') || q.includes('ಕೆಚ್ಚಲು') || q.includes('थनेला') || q.includes('రొమ్ము')) {
+    const mastitisEvents = timeline.filter((e) => (e.diagnosis || '').toLowerCase().includes('mastitis') || (e.clinicalObservations || '').toLowerCase().includes('mastitis'));
+
+    if (mode === 'veterinarian') {
+      return `### 🩺 Clinical Protocol: Bovine Mastitis Assessment & Management
+
+**Patient:** ${cattle.cattleId} (${name}) | **Breed:** ${breed}
+**Historical Ledger:** ${mastitisEvents.length} recorded mastitis episode(s).
+
+**Diagnostic & Treatment Protocol:**
+1. **California Mastitis Test (CMT):** Score each quarter (Negative, Trace, 1, 2, 3).
+2. **Clinical Signs:** Auscultate for systemic pyrexia, evaluate local heat, pain, edema, and milk consistency (clots, flakes, serous).
+3. **Antimicrobial Therapy:**
+   - Intramammary: Cephalosporin (e.g., Cefquinome) or Cloxacillin infusion after thorough quarter evacuation.
+   - Systemic (if pyrexic/acute): Ceftiofur sodium (1.1-2.2 mg/kg IM) or Enrofloxacin (5 mg/kg SC/IM).
+4. **Anti-inflammatory:** Flunixin meglumine (2.2 mg/kg IV) or Meloxicam (0.5 mg/kg IM) to reduce endotoxin-induced tissue necrosis.
+5. **Milk Withdrawal:** Strictly observe 72–96 hr withdrawal period before human consumption.`;
+    }
+
+    return `### 🩺 Udder Health & Mastitis Guide for ${name}
+
+${greeting}! Mastitis (ಕೆಚ್ಚಲು ಬಾವು / थनेला) is an inflammation of the udder teats. Here is the evaluation for **${name}**:
+
+- **CowCare Records:** ${mastitisEvents.length > 0 ? `⚠️ **Attention:** ${name} has had ${mastitisEvents.length} previous treatment(s) for mastitis on record. Inspect carefully.` : `✅ **Clean Record:** No prior mastitis treatments recorded.`}
+- **Early Signs to Inspect:**
+  - Swollen, hard, or unusually hot teat quarter.
+  - Watery, yellowish milk, or visible white flakes/clots in the first few milk streams.
+  - Cow shows discomfort or kicks when touched.
+- **Prevention Best Practices:**
+  - Strip the first 2-3 streams of milk into a strip cup before milking.
+  - After milking, dip all 4 teats in 0.5% povidone-iodine teat dip solution.
+  - Keep the shed floor clean and dry; do not let the cow sit immediately after milking (feed green fodder to keep her standing for 30 minutes).`;
+  }
+
+  // 4. RESPIRATORY DISEASE / COUGH / FEVER
+  if (q.includes('respirat') || q.includes('cough') || q.includes('fever') || q.includes('brd') || q.includes('temperature') || q.includes('ಜ್ವರ') || q.includes('காய்ச்சல்') || q.includes('बुखार') || q.includes('జ్వరం')) {
+    if (mode === 'veterinarian') {
+      return `### 🩺 Bovine Respiratory Disease (BRD) Clinical Guidance
+
+**Patient:** ${cattle.cattleId} (${name})
+
+**Differential Diagnosis & Management Protocol:**
+1. **Etiological Differentials:** *Mannheimia haemolytica*, *Pasteurella multocida*, *Histophilus somni*, BRSV, IBR (Bovine Herpesvirus-1).
+2. **Physical Evaluation:** Auscultate cranioventral lung fields for crackles/wheezes. Assess rectal temperature (pyrexia > 103.5°F).
+3. **Primary Antimicrobial Protocol:**
+   - Florfenicol (20 mg/kg IM q48h, or 40 mg/kg SC once).
+   - Tulathromycin (2.5 mg/kg SC single injection) for extended macrolide coverage.
+4. **Adjunctive NSAID:** Meloxicam (0.5 mg/kg IM/SC) or Flunixin meglumine (2.2 mg/kg IV).
+5. **Supportive Care:** Isolate in well-ventilated, draught-free pen with fresh water.`;
+    }
+
+    return `### 🌡️ Fever & Respiratory Care for ${name}
+
+${greeting}! Here is important advice regarding fever and breathing symptoms:
+
+- **Normal Temperature Range:** A healthy cow has a body temperature of **100.4°F to 102.8°F** (38°C to 39.3°C).
+- **Warning Signs:**
+  - Dry, warm muzzle (a healthy cow always has a moist, cool muzzle).
+  - Rapid breathing, coughing, or nasal discharge.
+  - Dull eyes, drooping ears, and stopped rumination (chewing cud).
+- **Immediate Action:**
+  - Place the cow in a clean, shaded, well-ventilated area.
+  - Provide cool, clean drinking water.
+  - **Book a verified vet visit immediately on CowCare** — do not administer human medicines like paracetamol without a veterinary prescription.`;
+  }
+
+  // 5. PREGNANCY, CALVING & BREEDING
+  if (q.includes('pregnant') || q.includes('calv') || q.includes('heat') || q.includes('breeding') || q.includes('ai') || q.includes('semen') || q.includes('ಗರ್ಭ') || q.includes('கர்ப்பம்') || q.includes('गाभिन') || q.includes('గర్భం')) {
+    if (!isFemale) {
+      return `### 🐂 Breeding Guide — ${name}\n\n${greeting}! **${name}** is a male animal. For breeding bulls, ensure regular semen evaluation, high-protein feed, and testing for reproductive pathogens (Brucellosis, Trichomoniasis).`;
+    }
+
+    return `### 🐄 Pregnancy & Breeding Guide for ${name} (${breed})
+
+${greeting}! Here are key facts regarding breeding, pregnancy, and calving for **${name}**:
+
+- **Gestation Period:** Average pregnancy duration is **283 days (~9 months and 9 days)**.
+- **Detecting Heat (ಕಾಮದ ಲಕ್ಷಣಗಳು):**
+  - Restlessness, frequent bellowing, mounting other cattle or standing when mounted.
+  - Clear, transparent, rope-like mucus discharge from the vulva.
+  - Drop in milk yield and reduced appetite.
+- **Optimal Insemination (A.I.) Timing — AM-PM Rule:**
+  - If heat is observed in the morning → Inseminate in the evening.
+  - If heat is observed in the evening → Inseminate the next morning.
+- **Dry Cow Care:** Stop milking 60 days prior to expected calving to allow the udder to regenerate and produce high-quality colostrum for the newborn calf.`;
+  }
+
+  // 6. FEEDING & NUTRITION
+  if (q.includes('feed') || q.includes('fodder') || q.includes('grass') || q.includes('diet') || q.includes('silage') || q.includes('ಆಹಾರ') || q.includes('ಮೇವು') || q.includes('தீவனம்') || q.includes('चारा') || q.includes('మేత')) {
+    return `### 🌿 Balanced Daily Feeding Plan for ${name} (~${age} yrs, ${breed})
+
+${greeting}! To keep **${name}** healthy and maintain high productivity, follow this balanced dairy ration:
+
+1. **Green Fodder (ಹಸಿರು ಮೇವು / हरा चारा):** 25 – 35 kg daily (Hybrid Napier, CO-4, Maize, Sorghum, or Berseem).
+2. **Dry Fodder (ಒಣ ಮೇವು / सूखा चारा):** 4 – 6 kg daily (Paddy straw, Ragi straw, or Wheat straw) to provide essential dietary fiber.
+3. **Concentrate Cattle Feed (ಹಿಂಡಿ / दाना मिश्रण):**
+   - **Maintenance:** 1.5 kg daily for body weight maintenance.
+   - **Milk Production:** Add 400g of concentrate for every liter of milk produced.
+4. **Minerals & Salts:**
+   - 50g quality mineral mixture daily (essential for fertility, strong hooves, and disease immunity).
+   - 30g common iodized salt daily.
+5. **Fresh Clean Water:** 60 – 90 liters of fresh water available at all times.`;
+  }
+
+  // 7. DRUG DOSAGES & WITHDRAWAL PERIODS (VET MODE)
+  if (mode === 'veterinarian' && (q.includes('dose') || q.includes('dosage') || q.includes('withdrawal') || q.includes('antibiotic') || q.includes('pharmac'))) {
+    return `### 💊 Bovine Clinical Pharmacopeia & Withdrawal Guide
+
+**Patient:** ${cattle.cattleId} (${name})
+
+| Medication | Clinical Dosage & Route | Indication | Milk Withdrawal | Meat Withdrawal |
+|---|---|---|---|---|
+| **Meloxicam** | 0.5 mg/kg IM/SC/IV | Anti-inflammatory, Pyrexia | 5 Days | 15 Days |
+| **Flunixin Meglumine** | 2.2 mg/kg IV | Acute endotoxemia, Mastitis | 36 Hours | 4 Days |
+| **Oxytetracycline (LA)** | 20 mg/kg deep IM | Anaplasmosis, Pneumonia, Foot rot | 7 Days | 28 Days |
+| **Ceftiofur Sodium** | 1.1 – 2.2 mg/kg IM/SC | BRD, Acute Metritis, Foot rot | **0 Hours (Zero)** | 4 Days |
+| **Enrofloxacin** | 5 mg/kg SC/IM | Coliform mastitis, Enteritis | 84 Hours | 14 Days |
+| **Ivermectin** | 0.2 mg/kg SC | Endoparasites & Ectoparasites | **Do not use in lactating** | 35 Days |`;
+  }
+
+  // 8. GENERAL SMART RESPONSE
+  return `### 💡 Analysis for your question: "${question}"
+
+${greeting}! Here is the specific insight regarding **${name}** (${cattle.cattleId}):
+
+- **Animal Profile:** ${breed} | ${gender} | ~${age} years old | Status: **${cattle.status}**
+- **Verified Health Record:** ${timeline.length} clinical event(s) logged by licensed veterinarians on CowCare.
+- **Key Observation:** ${timeline.length === 0 ? 'This animal has a completely clean CowCare ledger with no major medical events recorded.' : `Latest event was on ${new Date(timeline[0].eventDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })} (${timeline[0].eventType}) by ${timeline[0].veterinarianId?.name || 'Veterinarian'}.`}
+- **Health Tip:** Ensure regular deworming every 90 days and maintain bi-annual FMD vaccinations to protect cattle productivity.`;
+}
+
+/**
+ * Deterministic fallback generator if GEMINI_API_KEY is not configured or service is unreachable.
+ * Designed to give genuinely useful, analysed information — not just raw data dumps.
+ */
+function generateFallbackSummary(cattle, timeline, mode, question, language = 'en') {
+  const eventCount = timeline.length;
+  const recentEvents = timeline.slice(0, 5);
+
+  // If a specific question was asked, generate dynamic tailored analysis first!
+  const dynamicAnswer = answerDynamicQuestion(question, cattle, timeline, mode, language);
+
+  // ── GENERAL MARKETPLACE MODE (no specific cow) ──
+  if (cattle.cattleId === 'MARKETPLACE') {
+    if (dynamicAnswer) {
+      return dynamicAnswer;
+    }
+
+    if (mode === 'veterinarian') {
+      return `### 🩺 Clinical Advisory — Marketplace Pre-Purchase Evaluation
+
+When evaluating cattle for purchase, perform a systematic clinical examination:
+
+- **General Condition:** Body condition score (BCS 1-5), coat quality, alertness, gait symmetry
+- **Vital Signs:** Temperature (normal: 100.4-103.1°F), heart rate (40-80 bpm), respiration (10-30 bpm)
+- **Eyes & Mucous Membranes:** Check for pallor (anaemia), icterus (liver issues), conjunctivitis
+- **Udder Examination:** Palpate all four quarters for fibrosis, heat, swelling (mastitis indicators)
+- **Reproductive History:** Calving history, inter-calving interval, any dystocia or retained placenta
+- **Lameness Assessment:** Watch the animal walk — check for digital dermatitis, sole ulcers, hoof overgrowth
+- **Respiratory:** Auscultate lungs bilaterally for crackles, wheezes (BRD indicators)
+- **Lymph Nodes:** Palpate prescapular and prefemoral nodes for enlargement
+
+**Request from seller:** Vaccination records, deworming schedule, last FMD/HS/BQ vaccination date, any recent antibiotic use.`;
+    }
+
+    return `### 🐄 Buying Cattle? Here's Your Smart Checklist!
+
+Namaste! Before you purchase any cow from the marketplace, here are the important things to check:
+
+**👀 What to Look For:**
+- Is the cow active and alert? Dull or lazy behaviour may mean illness
+- Check the coat — it should be smooth and shiny, not rough or patchy
+- Watch her walk — she should walk straight without limping
+- Look at the eyes — they should be bright and clear, not watery or pale
+- Check the udder — all four teats should be soft, no hard lumps (sign of mastitis)
+
+**📋 Questions to Ask the Seller:**
+- When was the last vaccination done? (FMD, HS, BQ are essential)
+- Has the cow had any major illness or surgery?
+- How many calves has she given? Any difficult deliveries?
+- What is the daily milk yield?
+- Has she been dewormed recently?
+
+**💉 Check the CowCare Records:**
+- Cows with verified CowCare health records are safer to buy
+- Look for regular vet visits and up-to-date vaccinations
+- Check if any past mastitis or reproductive issues are recorded
+
+**⚠️ Important:** Always have a qualified veterinarian examine the cow in person before finalizing the purchase. No online record can replace a physical examination.`;
+  }
+
+  // ── VET MODE: Specific Cow Analysis ──
   if (mode === 'veterinarian') {
-    let summary = `### Clinical Summary for ${cattle.cattleId} (${cattle.name || 'Cattle'})\n\n`;
-    summary += `- **Record Volume:** ${eventCount} total documented medical events.\n`;
-    summary += `- **Breed/Age/Status:** ${cattle.breed} | ~${cattle.estimatedAgeYears || '?'} yrs | ${cattle.status}\n\n`;
+    let summary = `### 📋 Clinical Summary for ${cattle.cattleId} (${cattle.name})\n\n`;
+    summary += `**Patient Profile:** ${cattle.breed} | ${cattle.gender === 'FEMALE' ? 'Female' : 'Male'} | ~${cattle.estimatedAgeYears || '?'} years | Status: ${cattle.status}\n\n`;
 
     if (eventCount === 0) {
-      summary += `No prior clinical events or surgical interventions on record in CowCare.\n`;
+      summary += `**Clinical History:** No prior medical events documented in CowCare. This is a clean record — no known pathology, but also no vaccination documentation.\n\n`;
+      summary += `**Recommendation:** Perform baseline physical examination. Check vaccination status (FMD, HS, BQ). Establish deworming schedule.\n`;
     } else {
+      const vaccinations = timeline.filter((e) => e.eventType === 'VACCINATION');
+      const treatments = timeline.filter((e) => e.eventType === 'TREATMENT');
+      const visits = timeline.filter((e) => e.eventType === 'VISIT');
+
+      summary += `**Record Summary:** ${eventCount} events — ${vaccinations.length} vaccination(s), ${treatments.length} treatment(s), ${visits.length} visit(s)\n\n`;
       summary += `**Recent Clinical History:**\n`;
       recentEvents.forEach((ev) => {
-        const d = new Date(ev.eventDate).toLocaleDateString();
-        summary += `- **${d} [${ev.eventType}]:** ${ev.diagnosis || 'Clinical visit'}. ${
-          ev.treatment?.length > 0 ? `Rx: ${ev.treatment.map((t) => t.name).join(', ')}` : ''
-        }\n`;
+        const d = new Date(ev.eventDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+        const vetName = ev.veterinarianId?.name || 'Verified Vet';
+        summary += `- **${d} [${ev.eventType}]** by ${vetName}: ${ev.diagnosis || ev.clinicalObservations || 'Routine visit'}`;
+        if (ev.treatment?.length > 0) {
+          summary += ` | Rx: ${ev.treatment.map((t) => `${t.name}${t.dosage ? ` (${t.dosage})` : ''}`).join(', ')}`;
+        }
+        summary += `\n`;
       });
     }
-    summary += `\n*Note: Running in offline deterministic review mode.*`;
+
+    if (dynamicAnswer) {
+      return `${dynamicAnswer}\n\n---\n\n${summary}`;
+    }
     return summary;
   }
 
-  // Farmer / Buyer mode fallback
-  let summary = `### 🐄 ${cattle.name} - Health Overview\n\n`;
-  summary += `Hello! Here's a simple breakdown of this cow's official CowCare records:\n\n`;
-  summary += `- **Breed:** ${cattle.breed} (${cattle.gender === 'FEMALE' ? 'Female Cow' : 'Male Bull'})\n`;
-  summary += `- **Age:** Approximately ${cattle.estimatedAgeYears || 'N/A'} years old\n`;
-  summary += `- **Health Records:** ${eventCount} verified veterinary visit${eventCount === 1 ? '' : 's'} on record\n\n`;
+  // ── FARMER MODE: Specific Cow Analysis (Plain Language) ──
+  let summary = `### 🐄 Health Overview for ${cattle.name}\n\n`;
+
+  if (cattle.sale?.askingPrice) {
+    summary += `**Price:** ₹${cattle.sale.askingPrice.toLocaleString('en-IN')} | `;
+  }
+  summary += `**Breed:** ${cattle.breed} | **Age:** ~${cattle.estimatedAgeYears || '?'} years | **Gender:** ${cattle.gender === 'FEMALE' ? 'Female Cow 🐄' : 'Male Bull 🐂'}\n\n`;
 
   if (eventCount === 0) {
-    summary += `📋 No recorded illnesses or medical procedures have been logged for this cow yet.\n\n`;
+    summary += `**Health Records:** This cow has no veterinary visits recorded in CowCare yet.\n\n`;
+    summary += `This doesn't mean the cow is unhealthy — it just means no vet has logged any visits through this platform yet.\n\n`;
+    summary += `**What you should do:**\n`;
+    summary += `- Ask the seller about vaccination history (FMD, HS, BQ)\n`;
+    summary += `- Ask if she's been dewormed recently\n`;
+    summary += `- Check her physical health — eyes, coat, udder, gait\n`;
   } else {
-    summary += `**Recent Veterinary Care:**\n`;
-    recentEvents.forEach((ev) => {
-      const d = new Date(ev.eventDate).toLocaleDateString();
-      summary += `- 📅 **${d}:** ${ev.eventType.replace(/_/g, ' ')} — ${ev.diagnosis || 'Routine checkup'}\n`;
-    });
-    summary += `\n`;
+    const vaccinations = timeline.filter((e) => e.eventType === 'VACCINATION');
+    const treatments = timeline.filter((e) => e.eventType === 'TREATMENT');
+
+    // Health status
+    if (treatments.length > 0) {
+      summary += `⚠️ **Note:** This cow has had ${treatments.length} treatment(s) for health issues. Check the details below carefully.\n\n`;
+    } else {
+      summary += `✅ **Good Sign:** No treatments for major illnesses on record.\n\n`;
+    }
+
+    summary += `**Health Records:** ${eventCount} verified vet visit(s) on record\n\n`;
+
+    // Vaccinations
+    if (vaccinations.length > 0) {
+      summary += `**💉 Vaccinations (${vaccinations.length}):**\n`;
+      vaccinations.slice(0, 3).forEach((v) => {
+        const d = new Date(v.eventDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+        const name = v.treatment?.[0]?.name || v.clinicalObservations || 'Vaccine';
+        summary += `- ${d}: ${name}\n`;
+      });
+      summary += `\n`;
+    } else {
+      summary += `⚠️ **No vaccinations recorded** — Ask the seller if vaccinations were done by a local vet outside CowCare.\n\n`;
+    }
+
+    // Past illnesses
+    if (treatments.length > 0) {
+      summary += `**🩺 Past Health Issues & Treatments:**\n`;
+      treatments.slice(0, 3).forEach((t) => {
+        const d = new Date(t.eventDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+        const condition = t.diagnosis || t.clinicalObservations || 'Treated';
+        const rx = t.treatment?.[0]?.name ? ` — ${t.treatment[0].name}` : '';
+        summary += `- ${d}: ${condition}${rx}\n`;
+      });
+      summary += `\n`;
+    }
+
+    // Follow-ups needed
+    const pendingFollowUps = timeline.filter((e) => e.followUpRequired && !e.followUpCompleted);
+    if (pendingFollowUps.length > 0) {
+      summary += `**📅 Follow-ups Needed:** ${pendingFollowUps.length} follow-up visit(s) pending — ask the seller if these were completed.\n\n`;
+    }
   }
 
-  summary += `⚠️ **Important:** Always arrange an in-person physical examination with a qualified veterinarian before finalizing any cattle purchase.\n`;
-  summary += `\n*Instant overview prepared from verified medical records.*`;
+  summary += `\n**Buyer Consideration:**`;
+  summary += `\n⚠️ **Remember:** Always complete an in-person physical examination with a qualified veterinarian before buying any cattle.`;
+
+  if (dynamicAnswer) {
+    return `${dynamicAnswer}\n\n---\n\n${summary}`;
+  }
   return summary;
 }
 
@@ -184,10 +494,10 @@ async function generateCowSummary({ cattle, timeline, mode = 'farmer', question 
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    console.warn('[CowCare AI] GEMINI_API_KEY is not configured in .env. Providing deterministic fallback.');
+    console.warn('[CowCare AI] GEMINI_API_KEY is not configured in .env. Providing intelligent dynamic analysis.');
     return {
       success: true,
-      answer: generateFallbackSummary(cattle, timeline, mode, question),
+      answer: generateFallbackSummary(cattle, timeline, mode, question, language),
       isFallback: true,
     };
   }
@@ -216,11 +526,12 @@ RULES & CONSTRAINTS:
     ? `User Question: "${question.trim()}"\n\nPlease answer this question using ONLY the cattle data and medical timeline below:\n\n${contextData}`
     : `Please generate a comprehensive, friendly health summary for this cattle using the records below:\n\n${contextData}`;
 
-  // Call Gemini REST API (gemini-2.0-flash with gemini-1.5-flash and gemini-2.5-flash)
-  const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash'];
+  // Call Gemini REST API (gemini-2.0-flash with gemini-1.5-flash and gemini-1.5-pro)
+  const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
 
   for (const model of models) {
     try {
+      console.log(`[CowCare AI] Calling Gemini (${model}) for ${mode} query...`);
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
         {
@@ -255,6 +566,7 @@ RULES & CONSTRAINTS:
       const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
       if (generatedText) {
+        console.log(`[CowCare AI] Successfully received response from ${model}`);
         return {
           success: true,
           answer: generatedText,
@@ -268,10 +580,10 @@ RULES & CONSTRAINTS:
   }
 
   // If all Gemini calls fail, use graceful fallback
-  console.warn('[CowCare AI] Gemini API calls failed. Falling back to deterministic summary.');
+  console.warn('[CowCare AI] Gemini API calls failed. Falling back to intelligent dynamic analysis.');
   return {
     success: true,
-    answer: generateFallbackSummary(cattle, timeline, mode, question),
+    answer: generateFallbackSummary(cattle, timeline, mode, question, language),
     isFallback: true,
   };
 }
