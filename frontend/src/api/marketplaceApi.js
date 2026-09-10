@@ -27,4 +27,8 @@ export const marketplaceApi = {
   // Remove cow from marketplace
   removeCowFromSale: (cattleId) =>
     axiosClient.delete(`/marketplace/cows/${cattleId}/sale`),
+
+  // Buyer requests ownership after offline deal agreed
+  requestOwnership: (cattleId) =>
+    axiosClient.post(`/marketplace/cows/${cattleId}/request-ownership`),
 };

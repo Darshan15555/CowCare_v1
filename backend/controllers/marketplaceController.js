@@ -1,8 +1,10 @@
 const asyncHandler = require('express-async-handler');
 const Cattle = require('../models/Cattle');
+const CattleTransfer = require('../models/CattleTransfer');
 const MedicalEvent = require('../models/MedicalEvent');
 const User = require('../models/User');
 const { canTransitionSale } = require('../utils/saleStateMachine');
+const { notifyUser } = require('./requestController');
 
 // @route POST /api/cattle/:id/sale
 // @route POST /api/cattle/:id/sale
@@ -424,6 +426,72 @@ const getFavoriteCows = asyncHandler(async (req, res) => {
   });
 });
 
+// @route POST /api/marketplace/cows/:id/request-ownership
+// @access Private (FARMER — buyer requests ownership after offline deal)
+const requestOwnership = asyncHandler(async (req, res) => {
+  const cattle = await Cattle.findById(req.params.id);
+  if (!cattle || !cattle.isActive) {
+    res.status(404);
+    throw new Error('Cattle not found.');
+  }
+
+  // Must be open for sale or sale pending
+  if (!['OPEN_FOR_SALE', 'SALE_PENDING'].includes(cattle.sale?.status)) {
+    res.status(400);
+    throw new Error('This cow is not currently available for purchase.');
+  }
+
+  // Buyer cannot be the owner
+  if (String(cattle.ownerId) === String(req.user._id)) {
+    res.status(400);
+    throw new Error('You already own this cow.');
+  }
+
+  // Check for existing pending transfer
+  const existingPending = await CattleTransfer.findOne({ cattleId: cattle._id, status: 'PENDING' });
+  if (existingPending) {
+    const isMyRequest = String(existingPending.toOwnerId) === String(req.user._id);
+    if (isMyRequest) {
+      res.status(409);
+      throw new Error('You have already requested ownership of this cow. Waiting for seller confirmation.');
+    }
+    res.status(409);
+    throw new Error('Another buyer has already requested ownership. Please wait or contact the seller.');
+  }
+
+  // Create the transfer record
+  const transfer = await CattleTransfer.create({
+    cattleId: cattle._id,
+    cattleIdSnapshot: cattle.cattleId,
+    cattleNameSnapshot: cattle.name,
+    fromOwnerId: cattle.ownerId,
+    toOwnerId: req.user._id,
+    status: 'PENDING',
+  });
+
+  // Move sale status to SALE_PENDING
+  if (cattle.sale.status === 'OPEN_FOR_SALE') {
+    cattle.sale.status = 'SALE_PENDING';
+    await cattle.save();
+  }
+
+  // Notify the seller
+  await notifyUser({
+    userId: cattle.ownerId,
+    type: 'STATUS_UPDATE',
+    title: 'Ownership request received',
+    message: `${req.user.name} wants to purchase and take ownership of ${cattle.name} (${cattle.cattleId}). Go to Transfers to accept or decline.`,
+    priority: 'INFO',
+    cattleId: cattle._id,
+  });
+
+  res.status(201).json({
+    success: true,
+    message: `Ownership request sent to the seller. They will confirm the transfer once the deal is complete.`,
+    transfer,
+  });
+});
+
 // @route GET /api/marketplace/cows/:id
 // @access Private (FARMER, ADMIN, VETERINARIAN)
 const getMarketplaceCowProfile = asyncHandler(async (req, res) => {
@@ -452,6 +520,16 @@ const getMarketplaceCowProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id).select('favorites');
   const isFavorited = user?.favorites?.some((f) => String(f) === String(cattle._id)) || false;
 
+  // Check if the current user (buyer) has a pending ownership request for this cow
+  let buyerTransfer = null;
+  if (!isOwner && req.user.role === 'FARMER') {
+    buyerTransfer = await CattleTransfer.findOne({
+      cattleId: cattle._id,
+      toOwnerId: req.user._id,
+      status: 'PENDING',
+    }).select('status createdAt');
+  }
+
   res.json({
     success: true,
     cattle: {
@@ -460,6 +538,7 @@ const getMarketplaceCowProfile = asyncHandler(async (req, res) => {
     },
     timeline,
     isOwner,
+    buyerTransfer,
   });
 });
 
@@ -472,4 +551,5 @@ module.exports = {
   toggleFavoriteCow,
   getFavoriteCows,
   getMarketplaceCowProfile,
+  requestOwnership,
 };

@@ -4,7 +4,18 @@
  *
  * Mode 1: 'farmer' (Plain-Language Health Interpreter for Farmers & Prospective Buyers)
  * Mode 2: 'veterinarian' (Clinical Timeline Co-Pilot for Licensed Vets)
+ *
+ * Supports multilingual output: English, Kannada, Tamil, Hindi, Telugu, Marathi
  */
+
+const LANGUAGE_CONFIG = {
+  en: { name: 'English', greeting: 'Namaste', script: 'Latin' },
+  kn: { name: 'Kannada', greeting: 'ನಮಸ್ಕಾರ', script: 'Kannada' },
+  ta: { name: 'Tamil', greeting: 'வணக்கம்', script: 'Tamil' },
+  hi: { name: 'Hindi', greeting: 'नमस्ते', script: 'Devanagari' },
+  te: { name: 'Telugu', greeting: 'నమస్కారం', script: 'Telugu' },
+  mr: { name: 'Marathi', greeting: 'नमस्कार', script: 'Devanagari' },
+};
 
 /**
  * Build grounded context text from cattle profile and canonical medical events
@@ -99,31 +110,77 @@ function generateFallbackSummary(cattle, timeline, mode, question) {
   }
 
   // Farmer / Buyer mode fallback
-  let summary = `### Health Overview for ${cattle.name} (${cattle.cattleId})\n\n`;
-  summary += `Hello! Here is a simple breakdown based on this cow's official CowCare records:\n\n`;
-  summary += `- **Registered Information:** ${cattle.breed} (${cattle.gender}), approximately ${cattle.estimatedAgeYears || 'N/A'} years old.\n`;
-  summary += `- **Health Record Status:** ${eventCount} verified veterinary visit${eventCount === 1 ? '' : 's'} on record.\n\n`;
+  let summary = `### 🐄 ${cattle.name} - Health Overview\n\n`;
+  summary += `Hello! Here's a simple breakdown of this cow's official CowCare records:\n\n`;
+  summary += `- **Breed:** ${cattle.breed} (${cattle.gender === 'FEMALE' ? 'Female Cow' : 'Male Bull'})\n`;
+  summary += `- **Age:** Approximately ${cattle.estimatedAgeYears || 'N/A'} years old\n`;
+  summary += `- **Health Records:** ${eventCount} verified veterinary visit${eventCount === 1 ? '' : 's'} on record\n\n`;
 
   if (eventCount === 0) {
-    summary += `There are currently no recorded illnesses or medical procedures logged by a veterinarian for this cow in the CowCare database.\n\n`;
+    summary += `📋 No recorded illnesses or medical procedures have been logged for this cow yet.\n\n`;
   } else {
     summary += `**Recent Veterinary Care:**\n`;
     recentEvents.forEach((ev) => {
       const d = new Date(ev.eventDate).toLocaleDateString();
-      summary += `- **${d}:** ${ev.eventType.replace(/_/g, ' ')} — ${ev.diagnosis || 'Routine checkup'}.\n`;
+      summary += `- 📅 **${d}:** ${ev.eventType.replace(/_/g, ' ')} — ${ev.diagnosis || 'Routine checkup'}\n`;
     });
     summary += `\n`;
   }
 
-  summary += `**Buyer Consideration:** Always arrange an in-person physical examination with a qualified veterinarian before finalizing any cattle purchase.\n`;
-  summary += `\n*Note: Instant overview prepared from verified medical records.*`;
+  summary += `⚠️ **Important:** Always arrange an in-person physical examination with a qualified veterinarian before finalizing any cattle purchase.\n`;
+  summary += `\n*Instant overview prepared from verified medical records.*`;
   return summary;
+}
+
+/**
+ * Build language-aware system instruction for the farmer mode
+ */
+function buildFarmerSystemInstruction(language = 'en') {
+  const langCfg = LANGUAGE_CONFIG[language] || LANGUAGE_CONFIG.en;
+  const isNonEnglish = language !== 'en';
+
+  const languageDirective = isNonEnglish
+    ? `
+LANGUAGE REQUIREMENT (CRITICAL):
+- You MUST respond ENTIRELY in ${langCfg.name} (${langCfg.script} script).
+- Use natural, everyday ${langCfg.name} that a rural farmer would understand.
+- Do NOT mix English words unnecessarily. Only use English for technical/medical terms that have no common ${langCfg.name} equivalent, and always explain them in ${langCfg.name} immediately after.
+- Numbers, dates, and prices can remain in standard format (₹, digits).
+- Use ${langCfg.name} greetings and cultural context.
+`
+    : '';
+
+  return `
+You are the CowCare AI Health Assistant — think of yourself as a wise, experienced, and caring village veterinary expert who is sitting next to the farmer and explaining things warmly, like a knowledgeable friend.
+
+${languageDirective}
+
+YOUR PERSONALITY & TONE:
+1. **Warm and Personal**: Address the farmer by feeling, not formally. Use conversational tone as if you're explaining to a fellow farmer over chai. Be encouraging, not alarming.
+2. **Expert but Simple**: You know cattle health deeply, but you explain it the way an experienced farmer would — using analogies, practical examples, and everyday language. Avoid medical jargon unless you immediately explain it in simple words.
+3. **Structured yet Natural**: Use emoji (🐄 ✅ ⚠️ 💉 🩺 📋 💪 🌿) to make information scannable. Use bullet points and bold text for key facts, but weave them into a natural narrative.
+4. **Actionable Advice**: Don't just list facts — tell the farmer what to look for, what questions to ask the vet, what signs to watch for, and practical next steps.
+5. **Culturally Aware**: Reference Indian dairy farming context — monsoon seasons, local breeds, common regional diseases, local feeding practices when relevant.
+
+SAFETY RULES (NON-NEGOTIABLE):
+1. **Strictly Grounded**: Answer ONLY based on the verified CowCare medical records provided. NEVER invent or hallucinate medical events not in the records.
+2. **NO Prescriptions**: NEVER prescribe medications, calculate dosages, or recommend treatments independently. Always say "consult your local veterinarian".
+3. **NO Buy/Don't Buy Commands**: For marketplace queries, present factual health points to consider, but let the farmer decide. Frame as "things to consider" not directives.
+4. **Physical Exam Reminder**: Always gently remind that a physical vet inspection is recommended before any purchase.
+
+FORMAT:
+- Start with a friendly greeting and the cow's name
+- Give an overall health impression first (is the cow generally healthy, well-cared for?)
+- Then break down specifics: vaccination status, past illnesses, treatments, follow-ups
+- End with practical advice or "things to watch for"
+- Keep responses detailed but readable — aim for the quality of a knowledgeable person explaining, not a computer generating a report
+`.trim();
 }
 
 /**
  * Main Gemini AI invocation function
  */
-async function generateCowSummary({ cattle, timeline, mode = 'farmer', question = '', activeCase = null }) {
+async function generateCowSummary({ cattle, timeline, mode = 'farmer', question = '', activeCase = null, language = 'en' }) {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
@@ -151,23 +208,13 @@ RULES & CONSTRAINTS:
 5. Format: Use clean markdown with clear headings, bullet points, and high-signal clinical observations.
 `.trim();
   } else {
-    // Farmer / Buyer mode
-    systemInstruction = `
-You are the CowCare Health Interpreter, an AI assistant helping dairy farmers and prospective cattle buyers understand a cow's official medical history.
-
-RULES & SAFETY CONSTRAINTS:
-1. Plain, Simple Language: Explain medical events, illnesses, and vaccines in friendly, easy-to-understand terms suitable for rural farmers. Avoid overly complex medical jargon without explaining it.
-2. Strictly Grounded: Answer ONLY based on the verified CowCare medical records provided below. NEVER invent, hallucinate, or assume medical events not present in the record.
-3. NO Autonomous Diagnoses or Prescriptions: NEVER prescribe medications, calculate drug dosages, or recommend independent medical treatments.
-4. Objective Purchasing Considerations: Do NOT issue direct "Buy" or "Do Not Buy" commands. Instead, provide factual points to consider (e.g., "Vaccinations are current", "Has had 2 recorded mastitis treatments in the past year").
-5. Always remind the farmer that a physical veterinary inspection prior to purchase is strongly recommended.
-6. Format: Use polite, encouraging, structured markdown with bullet points and bold highlights.
-`.trim();
+    // Farmer / Buyer mode — multilingual, warm, expert
+    systemInstruction = buildFarmerSystemInstruction(language);
   }
 
   const userPrompt = question && question.trim().length > 0
     ? `User Question: "${question.trim()}"\n\nPlease answer this question using ONLY the cattle data and medical timeline below:\n\n${contextData}`
-    : `Please generate a comprehensive medical history summary for this cattle using the records below:\n\n${contextData}`;
+    : `Please generate a comprehensive, friendly health summary for this cattle using the records below:\n\n${contextData}`;
 
   // Call Gemini REST API (gemini-2.0-flash with gemini-1.5-flash and gemini-2.5-flash)
   const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash'];
@@ -190,9 +237,9 @@ RULES & SAFETY CONSTRAINTS:
               },
             ],
             generationConfig: {
-              temperature: 0.2, // Low temperature for high factual grounding
-              topP: 0.8,
-              maxOutputTokens: 1200,
+              temperature: 0.35, // Slightly warmer for natural language while staying grounded
+              topP: 0.85,
+              maxOutputTokens: 2000,
             },
           }),
         }
@@ -233,4 +280,5 @@ module.exports = {
   generateCowSummary,
   generateFallbackSummary,
   buildCattleContext,
+  LANGUAGE_CONFIG,
 };

@@ -6,12 +6,53 @@ import { getErrorMessage } from '../../utils/errorMessage';
 import farmerAvatar from '../../assets/ai_farmer_avatar.jpg';
 import doctorAvatar from '../../assets/ai_doctor_avatar.jpg';
 
-const FARMER_PROMPTS = [
-  "Summarize this cow's health history",
-  "What health problems has this cow had?",
-  "Explain the previous treatments",
-  "What should I check before buying this cow?",
-];
+const LANGUAGE_LABELS = {
+  en: 'English',
+  kn: 'ಕನ್ನಡ',
+  ta: 'தமிழ்',
+  hi: 'हिन्दी',
+  te: 'తెలుగు',
+  mr: 'मराठी',
+};
+
+const FARMER_PROMPTS = {
+  en: [
+    "Summarize this cow's health in simple words",
+    "What health problems has this cow had?",
+    "Is this cow safe to buy?",
+    "What should I check before buying?",
+  ],
+  kn: [
+    'ಈ ಹಸುವಿನ ಆರೋಗ್ಯ ಹೇಗಿದೆ?',
+    'ಈ ಹಸುಗೆ ಏನೇನು ರೋಗಗಳು ಬಂದಿದ್ದವು?',
+    'ಈ ಹಸುವನ್ನು ಕೊಳ್ಳಬಹುದೇ?',
+    'ಲಸಿಕೆ ಹಾಕಿಸಿದ್ದಾರಾ?',
+  ],
+  ta: [
+    'இந்த மாட்டின் ஆரோக்கியம் எப்படி?',
+    'என்ன நோய்கள் வந்திருந்தது?',
+    'இந்த மாட்டை வாங்கலாமா?',
+    'தடுப்பூசி போட்டிருக்காங்களா?',
+  ],
+  hi: [
+    'इस गाय की सेहत कैसी है?',
+    'क्या बीमारियां आई हैं इसे?',
+    'क्या यह गाय खरीदना सही है?',
+    'टीकाकरण हुआ है क्या?',
+  ],
+  te: [
+    'ఈ ఆవు ఆరోగ్యం ఎలా ఉంది?',
+    'ఏమి వ్యాధులు వచ్చాయి?',
+    'ఈ ఆవును కొనవచ్చా?',
+    'టీకాలు వేయించారా?',
+  ],
+  mr: [
+    'या गायीचे आरोग्य कसे आहे?',
+    'कोणते आजार आले होते?',
+    'ही गाय विकत घ्यायला चालेल का?',
+    'लसीकरण झाले आहे का?',
+  ],
+};
 
 const VET_PROMPTS = [
   'Differential diagnosis for bovine respiratory disease',
@@ -38,7 +79,9 @@ export default function AiAssistant({
   const chatEndRef = useRef(null);
 
   const isVet = mode === 'veterinarian' || user?.role === 'VETERINARIAN';
-  const quickPrompts = isVet ? VET_PROMPTS : FARMER_PROMPTS;
+  const userLang = user?.preferredLanguage || 'en';
+  const quickPrompts = isVet ? VET_PROMPTS : (FARMER_PROMPTS[userLang] || FARMER_PROMPTS.en);
+  const langLabel = LANGUAGE_LABELS[userLang] || 'English';
   const firstName = user?.name ? user.name.split(' ')[0] : isVet ? 'Doctor' : 'Farmer';
 
   const scrollToBottom = () => {
@@ -268,6 +311,11 @@ export default function AiAssistant({
                   >
                     {isVet ? 'Clinical Mode' : 'Health Interpreter'}
                   </span>
+                  {!isVet && userLang !== 'en' && (
+                    <span className="text-[9px] font-sans uppercase font-bold px-1.5 py-0.5 rounded border bg-amber-alert-100 text-amber-alert-800 border-amber-alert-200">
+                      {langLabel}
+                    </span>
+                  )}
                 </div>
                 <p className="text-[11px] text-mist-200 font-sans truncate max-w-[220px]">
                   {cattleId ? `${cattleName} (${cattleId})` : isVet ? 'Differential Diagnosis & Treatment Guidance' : 'Livestock Health Intelligence'}

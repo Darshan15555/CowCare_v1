@@ -9,6 +9,7 @@ const {
   listCowForSale,
   updateSaleListing,
   removeCowFromSale,
+  requestOwnership,
 } = require('../controllers/marketplaceController');
 const { protect } = require('../middleware/auth');
 const { restrictTo } = require('../middleware/roleCheck');
@@ -34,6 +35,9 @@ router.get('/cows', getMarketplaceCattle);
 
 // Detailed marketplace passport + verified medical timeline
 router.get('/cows/:id', getMarketplaceCowProfile);
+
+// Buyer requests ownership after offline deal agreed
+router.post('/cows/:id/request-ownership', restrictTo('FARMER'), requestOwnership);
 
 // Convenient alias endpoints for listing/updating cattle sale status
 router.post('/cows/:id/sale', restrictTo('FARMER'), upload.array('photos', 10), openForSaleValidators, validate, listCowForSale);

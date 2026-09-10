@@ -164,6 +164,7 @@ const updateMe = asyncHandler(async (req, res) => {
     avatarUrl,
     farmName,
     defaultLocation,
+    preferredLanguage,
     specialization,
     licenseNumber,
     yearsOfExperience,
@@ -180,6 +181,7 @@ const updateMe = asyncHandler(async (req, res) => {
   if (user.role === 'FARMER') {
     if (farmName !== undefined) user.farmName = farmName;
     if (defaultLocation !== undefined) user.defaultLocation = defaultLocation;
+    if (preferredLanguage !== undefined) user.preferredLanguage = preferredLanguage;
   }
 
   if (user.role === 'VETERINARIAN') {

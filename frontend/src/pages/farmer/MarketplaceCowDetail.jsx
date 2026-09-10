@@ -22,6 +22,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Camera,
+  Handshake,
+  Loader2,
 } from 'lucide-react';
 import { marketplaceApi } from '../../api/marketplaceApi';
 import { getErrorMessage } from '../../utils/errorMessage';
@@ -56,6 +58,9 @@ export default function MarketplaceCowDetail() {
   const [editDesc, setEditDesc] = useState('');
   const [editStatus, setEditStatus] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Ownership request state for buyer
+  const [isRequesting, setIsRequesting] = useState(false);
 
   const loadProfile = async () => {
     setIsLoading(true);
@@ -133,7 +138,7 @@ export default function MarketplaceCowDetail() {
     );
   }
 
-  const { cattle, timeline = [], isOwner } = data;
+  const { cattle, timeline = [], isOwner, buyerTransfer } = data;
   const statusCfg = CATTLE_STATUS[cattle.status] || CATTLE_STATUS.HEALTHY;
   const vaccinations = timeline.filter((e) => e.eventType === 'VACCINATION');
 
@@ -408,6 +413,61 @@ export default function MarketplaceCowDetail() {
               </a>
             )}
           </div>
+
+          {/* Request Ownership — visible only to non-owner farmers */}
+          {!isOwner && user?.role === 'FARMER' && ['OPEN_FOR_SALE', 'SALE_PENDING'].includes(cattle.sale?.status) && (
+            <div className="p-4 rounded-2xl border border-mist-200 bg-gradient-to-r from-amber-alert-50 to-pasture-50">
+              {buyerTransfer ? (
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-alert-100 flex items-center justify-center shrink-0">
+                    <Handshake className="w-5 h-5 text-amber-alert-700" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-ink-900">Ownership Request Sent ✓</p>
+                    <p className="text-xs text-ink-500 mt-0.5">
+                      Waiting for <span className="font-medium">{cattle.ownerId?.name}</span> to confirm the transfer. You will be notified once accepted.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="w-10 h-10 rounded-full bg-pasture-100 flex items-center justify-center shrink-0">
+                      <Handshake className="w-5 h-5 text-pasture-700" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-ink-900">Agreed on a deal?</p>
+                      <p className="text-xs text-ink-500 mt-0.5">After calling and finalizing the deal, request ownership transfer here.</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm(`Request ownership of ${cattle.name}? The seller will be notified to confirm.`)) return;
+                      setIsRequesting(true);
+                      try {
+                        await marketplaceApi.requestOwnership(cattle._id);
+                        toast.success('Ownership request sent! The seller will confirm the transfer.');
+                        loadProfile();
+                      } catch (err) {
+                        toast.error(getErrorMessage(err, 'Could not send ownership request.'));
+                      } finally {
+                        setIsRequesting(false);
+                      }
+                    }}
+                    disabled={isRequesting}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-b from-pasture-500 to-pasture-700 text-white font-semibold text-xs hover:from-pasture-600 hover:to-pasture-800 transition-all shadow-md disabled:opacity-50 shrink-0"
+                  >
+                    {isRequesting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Handshake className="w-4 h-4" />
+                    )}
+                    <span>{isRequesting ? 'Sending...' : 'Request Ownership'}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

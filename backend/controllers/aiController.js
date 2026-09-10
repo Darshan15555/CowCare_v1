@@ -2,6 +2,7 @@ const asyncHandler = require('express-async-handler');
 const Cattle = require('../models/Cattle');
 const MedicalEvent = require('../models/MedicalEvent');
 const VetRequest = require('../models/VetRequest');
+const User = require('../models/User');
 const { generateCowSummary } = require('../services/geminiService');
 
 // @route POST /api/ai/cow-summary
@@ -12,6 +13,7 @@ const getCattleAiSummary = asyncHandler(async (req, res) => {
   // Handle general marketplace advisory questions when not on a specific cow
   if (!cattleId || cattleId === 'GENERAL_MARKETPLACE') {
     const resolvedMode = req.user.role === 'FARMER' ? 'farmer' : mode === 'farmer' ? 'farmer' : 'veterinarian';
+    const userLanguage = req.user.preferredLanguage || 'en';
     const aiResult = await generateCowSummary({
       cattle: {
         cattleId: 'MARKETPLACE',
@@ -24,6 +26,7 @@ const getCattleAiSummary = asyncHandler(async (req, res) => {
       timeline: [],
       mode: resolvedMode,
       question: question || 'What critical veterinary health points should I inspect before purchasing cattle in the marketplace?',
+      language: userLanguage,
     });
 
     return res.json({
@@ -83,12 +86,15 @@ const getCattleAiSummary = asyncHandler(async (req, res) => {
     activeCase = await VetRequest.findById(requestId).select('symptoms description urgency createdAt');
   }
 
+  const userLanguage = req.user.preferredLanguage || 'en';
+
   const aiResult = await generateCowSummary({
     cattle,
     timeline,
     mode: resolvedMode,
     question: question || '',
     activeCase,
+    language: userLanguage,
   });
 
   res.json({

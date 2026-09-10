@@ -73,6 +73,13 @@ const userSchema = new mongoose.Schema(
     // Farmers can keep a small personal directory of preferred veterinarians.
     favoriteVetIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 
+    // Preferred language for AI responses (ISO 639-1 codes)
+    preferredLanguage: {
+      type: String,
+      enum: ['en', 'kn', 'ta', 'hi', 'te', 'mr'],
+      default: 'en',
+    },
+
     // Refresh token rotation (hashed, single active session per device simplification)
     refreshTokenHash: { type: String, select: false, default: null },
   },

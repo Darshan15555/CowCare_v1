@@ -112,6 +112,12 @@ const respondToTransfer = asyncHandler(async (req, res) => {
       throw new Error('This cattle record has already changed hands. Please refresh.');
     }
 
+    // If the cattle was on the marketplace, mark the sale as SOLD
+    if (['OPEN_FOR_SALE', 'SALE_PENDING'].includes(updatedCattle.sale?.status)) {
+      updatedCattle.sale.status = 'SOLD';
+      await updatedCattle.save();
+    }
+
     transfer.status = 'ACCEPTED';
     transfer.respondedAt = new Date();
     await transfer.save();
