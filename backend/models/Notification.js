@@ -12,6 +12,7 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       enum: [
         'NEW_REQUEST',
+        'DIRECT_REQUEST',
         'REQUEST_ACCEPTED',
         'REQUEST_REJECTED',
         'STATUS_UPDATE',

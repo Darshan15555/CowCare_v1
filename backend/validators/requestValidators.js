@@ -31,6 +31,7 @@ const createRequestValidators = [
   body('preferredTime')
     .matches(/^([01]\d|2[0-3]):([0-5]\d)$/)
     .withMessage('Preferred time must be in HH:MM format.'),
+  body('requestedVeterinarianId').optional({ values: 'falsy' }).isMongoId().withMessage('Invalid veterinarian ID.'),
 ];
 
 const updateStatusValidators = [

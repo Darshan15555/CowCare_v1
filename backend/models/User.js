@@ -70,6 +70,8 @@ const userSchema = new mongoose.Schema(
 
     // Saved / Favorited Marketplace cattle listings
     favorites: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Cattle' }],
+    // Farmers can keep a small personal directory of preferred veterinarians.
+    favoriteVetIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 
     // Refresh token rotation (hashed, single active session per device simplification)
     refreshTokenHash: { type: String, select: false, default: null },

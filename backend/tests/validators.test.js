@@ -12,6 +12,7 @@ const {
   respondToTransferValidators,
 } = require('../validators/cattleTransferValidators');
 const { addCattleValidators } = require('../validators/cattleValidators');
+const { vetIdValidators, vetDirectoryValidators } = require('../validators/vetValidators');
 
 /**
  * Runs an express-validator chain against a fake request body and returns
@@ -152,6 +153,19 @@ test('booking request rejects an invalid priority value', async () => {
   assert.ok(errors.some((e) => e.path === 'priority'));
 });
 
+test('booking request validates an optional requested veterinarian id', async () => {
+  const base = { cattleId: '507f1f77bcf86cd799439011', priority: 'ROUTINE', problemDescription: 'Checkup', location: { lat: 12.9, lng: 77.6 }, preferredDate: '2026-09-01', preferredTime: '09:30' };
+  assert.equal((await runValidators(createRequestValidators, { ...base, requestedVeterinarianId: '507f1f77bcf86cd799439012' })).isValid, true);
+  assert.equal((await runValidators(createRequestValidators, { ...base, requestedVeterinarianId: 'not-an-id' })).isValid, false);
+});
+
+test('vet directory validators reject invalid ids and on-duty flag', async () => {
+  assert.equal((await runValidators(vetIdValidators, { })).isValid, false);
+  const req = { body: {}, query: { onDutyOnly: 'maybe' }, params: {} };
+  for (const validator of vetDirectoryValidators) await validator.run(req);
+  assert.equal(validationResult(req).isEmpty(), false);
+});
+
 test('rating rejects a value outside 1-5', async () => {
   const { isValid, errors } = await runValidators(submitRatingValidators, { stars: 6 });
   assert.equal(isValid, false);
@@ -223,4 +237,3 @@ test('change password accepts valid payload', async () => {
   });
   assert.equal(isValid, true);
 });
-

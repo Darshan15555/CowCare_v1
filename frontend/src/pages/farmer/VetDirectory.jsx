@@ -1,0 +1,19 @@
+import { useEffect, useState } from 'react';
+import { Heart, Search, Star } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { vetApi } from '../../api/vetApi';
+import { getErrorMessage } from '../../utils/errorMessage';
+
+export default function VetDirectory() {
+  const [vets, setVets] = useState([]); const [search, setSearch] = useState('');
+  const [onDutyOnly, setOnDutyOnly] = useState(false); const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const load = () => (favoritesOnly ? vetApi.favorites() : vetApi.list({ specialization: search || undefined, onDutyOnly: onDutyOnly || undefined }))
+    .then((res) => setVets(res.data.vets)).catch((err) => toast.error(getErrorMessage(err, 'Could not load veterinarians.')));
+  useEffect(() => { const timer = setTimeout(load, 200); return () => clearTimeout(timer); }, [search, onDutyOnly, favoritesOnly]);
+  const toggleFavorite = async (vet) => { try { await (vet.isFavorite ? vetApi.unfavorite(vet._id) : vetApi.favorite(vet._id)); load(); } catch (err) { toast.error(getErrorMessage(err, 'Could not update favorite.')); } };
+  return <div className="space-y-5"><div><h1 className="font-display text-2xl font-medium text-ink-900">Veterinarian Directory</h1><p className="text-sm text-ink-500">Choose a preferred veterinarian or find any available vet.</p></div>
+    <div className="flex flex-wrap gap-2"><label className="flex flex-1 items-center gap-2 rounded-lg border border-mist-300 bg-white px-3"><Search size={16} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search specialization" className="w-full py-2.5 outline-none" /></label><button onClick={() => setOnDutyOnly((x) => !x)} className={`rounded-lg px-3 text-sm ${onDutyOnly ? 'bg-pasture-600 text-white' : 'border border-mist-300'}`}>On duty only</button><button onClick={() => setFavoritesOnly((x) => !x)} className={`rounded-lg px-3 text-sm ${favoritesOnly ? 'bg-pasture-600 text-white' : 'border border-mist-300'}`}>My Favorite Vets</button></div>
+    <div className="grid gap-3 sm:grid-cols-2">{vets.map((vet) => <VetCard key={vet._id} vet={vet} onFavorite={() => toggleFavorite(vet)} />)}</div>{vets.length === 0 && <p className="rounded-xl border border-dashed border-mist-300 p-8 text-center text-sm text-ink-500">No veterinarians match these filters.</p>}</div>;
+}
+
+export function VetCard({ vet, onFavorite, onSelect }) { return <article className="rounded-xl border border-mist-200 bg-white p-4 shadow-sm"><div className="flex gap-3"><div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-pasture-100 font-semibold text-pasture-800">{vet.avatarUrl ? <img src={vet.avatarUrl} alt="" className="h-full w-full object-cover" /> : vet.name?.slice(0, 1)}</div><div className="min-w-0 flex-1"><div className="flex justify-between gap-2"><h2 className="font-semibold text-ink-900">Dr. {vet.name}</h2>{onFavorite && <button onClick={onFavorite} className={vet.isFavorite ? 'text-vital-500' : 'text-ink-400'} aria-label="Toggle favorite"><Heart size={18} fill={vet.isFavorite ? 'currentColor' : 'none'} /></button>}</div><p className="text-sm text-ink-500">{vet.specialization || 'General veterinary care'}</p><p className="mt-1 flex items-center gap-1 text-xs text-amber-600"><Star size={13} fill="currentColor" /> {vet.averageStars ?? 'New'} {vet.totalRatings ? `(${vet.totalRatings})` : ''}</p></div></div><div className="mt-3 flex items-center justify-between text-xs"><span>{vet.yearsOfExperience || 0} years experience · {vet.serviceAreaRadiusKm || 25} km</span><span className={vet.onDuty ? 'font-semibold text-pasture-700' : 'text-ink-400'}>{vet.onDuty ? 'On duty' : 'Off duty'}</span></div>{onSelect && <button onClick={() => onSelect(vet)} className="mt-3 w-full rounded-lg bg-pasture-600 py-2 text-sm font-semibold text-white">Choose this vet</button>}</article>; }
