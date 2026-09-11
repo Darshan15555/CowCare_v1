@@ -2,15 +2,16 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../utils/errorMessage';
-import { Camera, ChevronLeft, ChevronRight, MapPin, Navigation, Edit3, Mic, Square, Trash2, PlusCircle } from 'lucide-react';
+import { Camera, ChevronLeft, ChevronRight, MapPin, Navigation, Edit3, Mic, Square, Trash2, PlusCircle, Search, Star, X } from 'lucide-react';
 import { cattleApi } from '../../api/cattleApi';
 import { requestApi } from '../../api/requestApi';
 import { useAuth } from '../../context/AuthContext';
 import { useAudioRecorder } from '../../hooks/useAudioRecorder';
 import PriorityBadge from '../../components/common/PriorityBadge';
 import { PRIORITY } from '../../utils/constants';
+import { vetApi } from '../../api/vetApi';
 
-const STEPS = ['Select Cow', 'Describe Problem', 'Priority', 'Location', 'Date & Time', 'Review'];
+const STEPS = ['Select Cow', 'Describe Problem', 'Priority', 'Choose a Vet', 'Location', 'Date & Time', 'Review'];
 
 export default function BookVisit() {
   const { user } = useAuth();
@@ -30,11 +31,49 @@ export default function BookVisit() {
   const [manualAddress, setManualAddress] = useState('');
   const [preferredDate, setPreferredDate] = useState('');
   const [preferredTime, setPreferredTime] = useState('');
+  const [vetChoice, setVetChoice] = useState('ANY');
+  const [selectedVet, setSelectedVet] = useState(null);
+  const [favoriteVets, setFavoriteVets] = useState([]);
+  const [directoryVets, setDirectoryVets] = useState([]);
+  const [vetTab, setVetTab] = useState('FAVORITES');
+  const [vetSearch, setVetSearch] = useState('');
+  const [isLoadingVets, setIsLoadingVets] = useState(false);
+  const [favoriteLoadError, setFavoriteLoadError] = useState('');
+  const [directoryLoadError, setDirectoryLoadError] = useState('');
+  const [vetFetchAttempt, setVetFetchAttempt] = useState(0);
+  const [expandedVet, setExpandedVet] = useState(null);
   const recorder = useAudioRecorder({ maxDurationSec: 60 });
 
   useEffect(() => {
     cattleApi.getMine().then((res) => setMyCattle(res.data.cattle));
   }, []);
+  useEffect(() => {
+    if (step !== 3 || vetChoice !== 'SPECIFIC') return;
+    let isCurrent = true;
+    setIsLoadingVets(true);
+    setFavoriteLoadError('');
+    setDirectoryLoadError('');
+    Promise.allSettled([vetApi.favorites(), vetApi.list()])
+      .then(([favorites, directory]) => {
+        if (!isCurrent) return;
+        if (favorites.status === 'fulfilled') {
+          setFavoriteVets(favorites.value.data.vets || []);
+        } else {
+          setFavoriteLoadError('Could not load favorite veterinarians.');
+        }
+        if (directory.status === 'fulfilled') {
+          setDirectoryVets(directory.value.data.vets || []);
+        } else {
+          setDirectoryLoadError('Could not load the veterinarian directory.');
+        }
+      })
+      .finally(() => {
+        if (isCurrent) setIsLoadingVets(false);
+      });
+    return () => {
+      isCurrent = false;
+    };
+  }, [step, vetChoice, vetFetchAttempt]);
 
   useEffect(() => {
     if (locationSource === 'DEFAULT_FARM' && user?.defaultLocation) {
@@ -54,8 +93,11 @@ export default function BookVisit() {
   }, [priority]);
 
   const selectedCattle = myCattle.find((c) => c._id === selectedCattleId);
+  const searchableDirectoryVets = directoryVets.filter((vet) =>
+    `${vet.name} ${vet.specialization || ''}`.toLowerCase().includes(vetSearch.trim().toLowerCase())
+  );
 
-  const useCurrentLocation = () => {
+  const requestCurrentLocation = () => {
     if (!navigator.geolocation) {
       toast.error('Geolocation is not supported on this device.');
       return;
@@ -81,13 +123,13 @@ export default function BookVisit() {
   const autoLocationAttempted = useRef(false);
   useEffect(() => {
     if (
-      step === 3 &&
+      step === 4 &&
       locationSource === 'CURRENT_LOCATION' &&
       !location &&
       !autoLocationAttempted.current
     ) {
       autoLocationAttempted.current = true;
-      useCurrentLocation();
+      requestCurrentLocation();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, locationSource]);
@@ -101,8 +143,10 @@ export default function BookVisit() {
       case 2:
         return !!priority;
       case 3:
-        return !!location?.lat || locationSource === 'MANUAL';
+        return vetChoice === 'ANY' || !!selectedVet;
       case 4:
+        return !!location?.lat || locationSource === 'MANUAL';
+      case 5:
         return !!preferredDate && !!preferredTime;
       default:
         return true;
@@ -130,6 +174,7 @@ export default function BookVisit() {
       formData.append('location', JSON.stringify(finalLocation));
       formData.append('preferredDate', preferredDate);
       formData.append('preferredTime', preferredTime);
+      if (vetChoice === 'SPECIFIC' && selectedVet) formData.append('requestedVeterinarianId', selectedVet._id);
       photos.forEach((file) => formData.append('photos', file));
       if (recorder.audioBlob) {
         formData.append('voiceNote', recorder.audioBlob, 'voice-message.webm');
@@ -279,7 +324,7 @@ export default function BookVisit() {
 
         {step === 2 && (
           <div className="space-y-2">
-            {Object.entries(PRIORITY).map(([key, cfg]) => (
+            {Object.entries(PRIORITY).map(([key]) => (
               <button
                 key={key}
                 onClick={() => setPriority(key)}
@@ -301,6 +346,37 @@ export default function BookVisit() {
         )}
 
         {step === 3 && (
+          <div className="space-y-3">
+            <button onClick={() => { setVetChoice('ANY'); setSelectedVet(null); }} className={`w-full rounded-lg border p-3 text-left ${vetChoice === 'ANY' ? 'border-pasture-600 bg-pasture-50' : 'border-mist-200'}`}><p className="font-semibold">Any available vet</p><p className="text-xs text-ink-500">Notify every veterinarian currently on duty.</p></button>
+            <button onClick={() => setVetChoice('SPECIFIC')} className={`w-full rounded-lg border p-3 text-left ${vetChoice === 'SPECIFIC' ? 'border-pasture-600 bg-pasture-50' : 'border-mist-200'}`}><p className="font-semibold">Request a specific vet</p><p className="text-xs text-ink-500">If they do not respond, we will notify available vets automatically.</p></button>
+            {vetChoice === 'SPECIFIC' && (
+              selectedVet ? (
+                <div className="rounded-xl border border-pasture-300 bg-pasture-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-pasture-700">Selected veterinarian</p>
+                  <div className="mt-2 flex items-center justify-between gap-3"><div><p className="font-semibold text-ink-900">Dr. {selectedVet.name}</p><p className="text-sm text-ink-600">{selectedVet.specialization || 'General veterinary care'}</p></div><button onClick={() => { setSelectedVet(null); setExpandedVet(null); }} className="text-sm font-semibold text-pasture-700 hover:underline">Change</button></div>
+                </div>
+              ) : (
+                <div className="space-y-3 rounded-xl border border-pasture-200 bg-mist-50 p-3">
+                  <div className="flex rounded-lg bg-white p-1" role="tablist">
+                    <button onClick={() => setVetTab('FAVORITES')} className={`flex-1 rounded-md px-2 py-2 text-xs font-semibold ${vetTab === 'FAVORITES' ? 'bg-pasture-600 text-white' : 'text-ink-600'}`}>My Favorite Vets</button>
+                    <button onClick={() => setVetTab('ALL')} className={`flex-1 rounded-md px-2 py-2 text-xs font-semibold ${vetTab === 'ALL' ? 'bg-pasture-600 text-white' : 'text-ink-600'}`}>All Veterinarians</button>
+                  </div>
+                  {vetTab === 'ALL' && <label className="flex items-center gap-2 rounded-lg border border-mist-300 bg-white px-3"><Search size={15} className="text-ink-400" /><input value={vetSearch} onChange={(e) => setVetSearch(e.target.value)} placeholder="Search name or specialization" className="w-full py-2 text-sm outline-none" /></label>}
+                  {isLoadingVets ? <p className="py-5 text-center text-sm text-ink-500">Loading veterinarians...</p> : (vetTab === 'FAVORITES' ? favoriteLoadError : directoryLoadError) ? <div className="rounded-lg bg-vital-50 p-3 text-sm text-vital-700"><p>{vetTab === 'FAVORITES' ? favoriteLoadError : directoryLoadError}</p><button onClick={() => setVetFetchAttempt((attempt) => attempt + 1)} className="mt-2 font-semibold underline">Try again</button></div> : (
+                    <div className="space-y-2">
+                      {(vetTab === 'FAVORITES' ? favoriteVets : searchableDirectoryVets).map((vet) => <MiniVetCard key={vet._id} vet={vet} onClick={() => setExpandedVet(vet)} />)}
+                      {vetTab === 'FAVORITES' && favoriteVets.length === 0 && <div className="rounded-lg border border-dashed border-mist-300 bg-white p-4 text-center text-sm text-ink-500">You haven&apos;t added any favorites yet — <button onClick={() => setVetTab('ALL')} className="font-semibold text-pasture-700 hover:underline">browse All Veterinarians</button>.</div>}
+                      {vetTab === 'ALL' && searchableDirectoryVets.length === 0 && <p className="rounded-lg border border-dashed border-mist-300 bg-white p-4 text-center text-sm text-ink-500">No veterinarians match your search.</p>}
+                    </div>
+                  )}
+                  {expandedVet && <VetDetailPanel vet={expandedVet} onClose={() => setExpandedVet(null)} onChoose={() => { setSelectedVet(expandedVet); setExpandedVet(null); }} />}
+                </div>
+              )
+            )}
+          </div>
+        )}
+
+        {step === 4 && (
           <div className="space-y-2">
             <LocationOption
               icon={MapPin}
@@ -315,7 +391,7 @@ export default function BookVisit() {
               active={locationSource === 'CURRENT_LOCATION'}
               onClick={() => {
                 setLocationSource('CURRENT_LOCATION');
-                useCurrentLocation();
+                requestCurrentLocation();
               }}
             />
             <LocationOption
@@ -345,7 +421,7 @@ export default function BookVisit() {
           </div>
         )}
 
-        {step === 4 &&
+        {step === 5 &&
           (priority === 'EMERGENCY' ? (
             <div className="flex items-start gap-3 rounded-lg bg-vital-50 p-4">
               <span className="text-2xl">🔴</span>
@@ -381,7 +457,7 @@ export default function BookVisit() {
             </div>
           ))}
 
-        {step === 5 && (
+        {step === 6 && (
           <div className="space-y-3 text-sm">
             <ReviewRow label="Cow" value={`${selectedCattle?.name} (${selectedCattle?.cattleId})`} />
             <ReviewRow
@@ -390,6 +466,7 @@ export default function BookVisit() {
             />
             {recorder.audioBlob && <ReviewRow label="Voice message" value="🎙️ Recorded, ready to send" />}
             <ReviewRow label="Priority" value={<PriorityBadge priority={priority} size="sm" />} />
+            <ReviewRow label="Veterinarian" value={vetChoice === 'SPECIFIC' ? `Dr. ${selectedVet?.name}` : 'Any available vet'} />
             <ReviewRow
               label="Location"
               value={locationSource === 'MANUAL' ? manualAddress : location?.address || '—'}
@@ -454,4 +531,40 @@ function ReviewRow({ label, value }) {
       <span className="text-right font-medium text-ink-800">{value}</span>
     </div>
   );
+}
+
+function MiniVetCard({ vet, onClick }) {
+  return (
+    <button onClick={onClick} className="flex w-full items-center gap-3 rounded-xl border border-mist-200 bg-white p-3 text-left shadow-sm transition hover:border-pasture-400 hover:bg-pasture-50">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-pasture-100 font-semibold text-pasture-800">
+        {vet.avatarUrl ? <img src={vet.avatarUrl} alt="" className="h-full w-full object-cover" /> : vet.name?.slice(0, 1)}
+      </div>
+      <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-ink-900">Dr. {vet.name}</p><p className="truncate text-xs text-ink-500">{vet.specialization || 'General veterinary care'}</p><p className="mt-1 flex items-center gap-1 text-xs text-amber-600"><Star size={12} fill="currentColor" /> {vet.averageStars ?? 'New'}{vet.totalRatings ? ` (${vet.totalRatings})` : ''}</p></div>
+      <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${vet.onDuty ? 'bg-pasture-100 text-pasture-800' : 'bg-mist-100 text-ink-500'}`}>{vet.onDuty ? 'On duty' : 'Off duty'}</span>
+    </button>
+  );
+}
+
+function VetDetailPanel({ vet, onClose, onChoose }) {
+  return (
+    <div className="rounded-xl border border-pasture-300 bg-white p-4 shadow-md">
+      <div className="flex items-start justify-between gap-3"><div className="flex items-center gap-3"><div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-pasture-100 font-semibold text-pasture-800">{vet.avatarUrl ? <img src={vet.avatarUrl} alt="" className="h-full w-full object-cover" /> : vet.name?.slice(0, 1)}</div><div><h3 className="font-display font-semibold text-ink-900">Dr. {vet.name}</h3><p className="text-sm text-ink-500">{vet.specialization || 'General veterinary care'}</p></div></div><button onClick={onClose} className="rounded p-1 text-ink-400 hover:bg-mist-100" aria-label="Close vet details"><X size={18} /></button></div>
+      <div className="mt-4 grid grid-cols-2 gap-2 text-xs"><Detail label="Experience" value={`${vet.yearsOfExperience || 0} years`} /><Detail label="Service area" value={`${vet.serviceAreaRadiusKm || 25} km`} /><Detail label="Availability" value={vet.onDuty ? 'On duty now' : 'Currently off duty'} /><Detail label="Rating" value={`${vet.averageStars ?? 'New'}${vet.totalRatings ? ` / 5 (${vet.totalRatings})` : ''}`} /></div>
+      <div className="mt-3 rounded-lg bg-mist-50 p-2 text-xs text-ink-600">
+        <p>{vet.onDuty ? 'Available according to the current on-duty schedule.' : 'Off duty now. If they do not respond, your request will be offered to available vets.'}</p>
+        <p className="mt-1 font-medium text-ink-700">Schedule: {formatVetSchedule(vet.weeklySchedule)}</p>
+      </div>
+      <button onClick={onChoose} className="mt-4 w-full rounded-lg bg-pasture-600 py-2.5 text-sm font-semibold text-white hover:bg-pasture-700">Choose This Vet</button>
+    </div>
+  );
+}
+
+function Detail({ label, value }) { return <div className="rounded-lg bg-mist-50 p-2"><p className="text-ink-400">{label}</p><p className="mt-0.5 font-semibold text-ink-800">{value}</p></div>; }
+
+function formatVetSchedule(schedule = []) {
+  if (!schedule.length) return 'Flexible availability';
+  const workingDays = schedule.filter((day) => day.isWorking !== false);
+  if (!workingDays.length) return 'Not scheduled';
+  const times = [...new Set(workingDays.map((day) => `${day.startTime}-${day.endTime}`))];
+  return times.join(', ');
 }

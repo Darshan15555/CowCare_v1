@@ -77,7 +77,19 @@ export default function MyCattle() {
                   )}
                 </div>
                 <div className="p-3">
-                  <p className="truncate font-semibold text-ink-900">{c.name}</p>
+                  <div className="flex items-center justify-between gap-1">
+                    <p className="truncate font-semibold text-ink-900">{c.name}</p>
+                    {c.sale?.status === 'OPEN_FOR_SALE' && (
+                      <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800">
+                        For Sale
+                      </span>
+                    )}
+                    {c.sale?.status === 'SALE_PENDING' && (
+                      <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-orange-100 text-orange-800">
+                        Pending
+                      </span>
+                    )}
+                  </div>
                   <p className="truncate font-data text-xs text-ink-500">{c.cattleId}</p>
                   <span
                     className={`mt-2 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${statusConfig.badgeClass}`}

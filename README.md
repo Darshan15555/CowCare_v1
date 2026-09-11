@@ -117,6 +117,12 @@ frontend + tests where the sandbox allowed it):
   against a double-transfer race, mirroring the same pattern used for
   request acceptance.
 
+- **Preferred veterinarian requests** — farmers can browse active vets,
+  filter by specialization or on-duty status, save favorites, and direct a
+  booking to one vet. A direct request automatically becomes the normal
+  on-duty broadcast after 15 minutes (configurable with
+  `DIRECT_REQUEST_FALLBACK_MINUTES`) or immediately when that vet declines.
+
 ## Notes on production deployment
 
 - `axiosClient.js` uses a relative `/api` base URL, assuming the frontend is
@@ -196,4 +202,3 @@ against a live database are the one remaining gap — not possible in this
 sandboxed build environment, but straightforward to add once you have a
 real MongoDB connection (e.g. with `mongodb-memory-server` or a test Atlas
 cluster).
-

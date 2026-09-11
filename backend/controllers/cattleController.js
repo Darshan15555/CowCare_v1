@@ -143,7 +143,9 @@ async function authorizeCattleAccess(user, cattle) {
   if (user.role === 'ADMIN') return;
 
   if (user.role === 'FARMER') {
-    if (String(cattle.ownerId._id || cattle.ownerId) !== String(user._id)) {
+    const isOwner = String(cattle.ownerId._id || cattle.ownerId) === String(user._id);
+    const isOpenForSale = ['OPEN_FOR_SALE', 'SALE_PENDING'].includes(cattle.sale?.status);
+    if (!isOwner && !isOpenForSale) {
       const err = new Error('You do not have access to this cattle record.');
       err.statusCode = 403;
       throw err;

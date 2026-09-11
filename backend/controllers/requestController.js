@@ -10,6 +10,7 @@ const {
 } = require('../utils/requestStateMachine');
 const { isVetOnDutyNow } = require('../utils/vetAvailability');
 const { getIO } = require('../sockets/io');
+const { DIRECT_REQUEST_FALLBACK_MINUTES } = require('../utils/directRequestFallback');
 
 const PRIORITY_LABELS = {
   EMERGENCY: '🔴 EMERGENCY',
@@ -35,6 +36,18 @@ async function notifyUser({ userId, type, title, message, priority, requestId, c
   return notification;
 }
 
+async function broadcastRequestToOnDutyVets(request, fallback = false) {
+  const activeVets = await User.find({ role: 'VETERINARIAN', isActive: true, isAvailable: true });
+  const vets = activeVets.filter((vet) => isVetOnDutyNow(vet));
+  await Promise.all(vets.map((vet) => notifyUser({
+    userId: vet._id, type: 'NEW_REQUEST',
+    title: `${PRIORITY_LABELS[request.priority]} ${fallback ? 'Available request' : 'New veterinary request'}`,
+    message: `${request.cattleNameSnapshot} (${request.cattleIdSnapshot}) - ${request.problemDescription}`,
+    priority: request.priority, requestId: request._id, cattleId: request.cattleId,
+  })));
+  return vets.length;
+}
+
 // @route POST /api/requests
 // @access Private (FARMER)
 const createRequest = asyncHandler(async (req, res) => {
@@ -45,6 +58,7 @@ const createRequest = asyncHandler(async (req, res) => {
     location, // { lat, lng, address, source }
     preferredDate,
     preferredTime,
+    requestedVeterinarianId,
   } = req.body;
 
   if (!cattleId || !priority || !problemDescription || !location || !preferredDate || !preferredTime) {
@@ -62,6 +76,13 @@ const createRequest = asyncHandler(async (req, res) => {
   if (String(cattle.ownerId) !== String(req.user._id)) {
     res.status(403);
     throw new Error('You can only book visits for your own cattle.');
+  }
+  const requestedVet = requestedVeterinarianId
+    ? await User.findOne({ _id: requestedVeterinarianId, role: 'VETERINARIAN', isActive: true })
+    : null;
+  if (requestedVeterinarianId && !requestedVet) {
+    res.status(404);
+    throw new Error('Selected veterinarian was not found.');
   }
 
   const photoFiles = req.files?.photos || [];
@@ -86,21 +107,23 @@ const createRequest = asyncHandler(async (req, res) => {
     preferredTime,
     status: 'REQUESTED',
     statusHistory: [{ status: 'REQUESTED', note: 'Request created by farmer.' }],
+    requestedVeterinarianId: requestedVet?._id || null,
+    directRequestExpiresAt: requestedVet ? new Date(Date.now() + DIRECT_REQUEST_FALLBACK_MINUTES * 60 * 1000) : null,
   });
 
   // Broadcast to veterinarians who are actually on duty right now — combines
   // the manual toggle with their recurring weekly schedule, if configured.
-  const activeVets = await User.find({ role: 'VETERINARIAN', isActive: true, isAvailable: true });
-  const vets = activeVets.filter((vet) => isVetOnDutyNow(vet));
-  request.notifiedVeterinarianCount = vets.length;
+  const vets = requestedVet ? [requestedVet] : null;
+  const notifiedCount = requestedVet ? 1 : await broadcastRequestToOnDutyVets(request);
+  request.notifiedVeterinarianCount = notifiedCount;
   await request.save();
 
-  await Promise.all(
+  if (requestedVet) await Promise.all(
     vets.map((vet) =>
       notifyUser({
         userId: vet._id,
-        type: 'NEW_REQUEST',
-        title: `${PRIORITY_LABELS[priority]} New veterinary request`,
+        type: 'DIRECT_REQUEST',
+        title: `${PRIORITY_LABELS[priority]} Direct veterinary request`,
         message: `${cattle.name} (${cattle.cattleId}) — ${problemDescription}${
           voiceNoteUrl ? ' 🎙️ Voice note attached.' : ''
         }`,
@@ -111,7 +134,7 @@ const createRequest = asyncHandler(async (req, res) => {
     )
   );
 
-  res.status(201).json({ success: true, request, notifiedVeterinarianCount: vets.length });
+  res.status(201).json({ success: true, request, notifiedVeterinarianCount: notifiedCount });
 });
 
 // @route GET /api/requests
@@ -124,7 +147,7 @@ const getRequests = asyncHandler(async (req, res) => {
     filter.farmerId = req.user._id;
   } else if (req.user.role === 'VETERINARIAN') {
     // Unassigned pending requests + requests assigned to this vet.
-    filter.$or = [{ veterinarianId: req.user._id }, { veterinarianId: null, status: 'REQUESTED' }];
+    filter.$or = [{ veterinarianId: req.user._id }, { veterinarianId: null, status: 'REQUESTED', requestedVeterinarianId: null }, { veterinarianId: null, status: 'REQUESTED', requestedVeterinarianId: req.user._id }];
   }
   // ADMIN sees everything.
 
@@ -211,6 +234,25 @@ const updateRequestStatus = asyncHandler(async (req, res) => {
   ) {
     res.status(403);
     throw new Error('This request is already assigned to another veterinarian.');
+  }
+  if (req.user.role === 'VETERINARIAN' && existing.status === 'REQUESTED' && existing.requestedVeterinarianId && String(existing.requestedVeterinarianId) !== String(req.user._id)) {
+    res.status(403);
+    throw new Error('This request was directed to another veterinarian.');
+  }
+
+  if (nextStatus === 'REJECTED' && existing.requestedVeterinarianId && req.user.role === 'VETERINARIAN') {
+    const request = await VetRequest.findOneAndUpdate(
+      { _id: existing._id, status: 'REQUESTED', veterinarianId: null, requestedVeterinarianId: req.user._id },
+      { $set: { requestedVeterinarianId: null, directRequestFallbackAt: new Date(), rejectionReason: rejectionReason || 'No reason provided.' }, $push: { statusHistory: { status: 'REQUESTED', note: `Direct request declined. ${rejectionReason || ''}` } } },
+      { new: true }
+    );
+    if (!request) { res.status(409); throw new Error('This request was just updated. Please refresh.'); }
+    const count = await broadcastRequestToOnDutyVets(request, true);
+    request.directRequestFallbackNotifiedCount = count;
+    request.notifiedVeterinarianCount += count;
+    await request.save();
+    await notifyUser({ userId: request.farmerId, type: 'REQUEST_REJECTED', title: 'Selected vet declined - finding another vet', message: `Your selected veterinarian declined the request for ${request.cattleNameSnapshot}. We notified ${count} available veterinarian${count === 1 ? '' : 's'}.`, priority: request.priority, requestId: request._id, cattleId: request.cattleId });
+    return res.json({ success: true, request, broadcastFallback: true });
   }
 
   // Atomic conditional update — the query re-checks `status` (and, for a
@@ -360,8 +402,13 @@ const submitRating = asyncHandler(async (req, res) => {
 // @access Private — lets a farmer see a vet's track record, and a vet see
 // their own aggregate rating on their profile.
 const getVetRatingSummary = asyncHandler(async (req, res) => {
+  const summary = await getVetRatingSummaryForVet(req.params.vetId);
+  res.json({ success: true, ...summary });
+});
+
+async function getVetRatingSummaryForVet(vetId) {
   const [summary] = await VetRequest.aggregate([
-    { $match: { veterinarianId: new mongoose.Types.ObjectId(req.params.vetId), 'rating.stars': { $ne: null } } },
+    { $match: { veterinarianId: new mongoose.Types.ObjectId(vetId), 'rating.stars': { $ne: null } } },
     {
       $group: {
         _id: '$veterinarianId',
@@ -371,12 +418,11 @@ const getVetRatingSummary = asyncHandler(async (req, res) => {
     },
   ]);
 
-  res.json({
-    success: true,
+  return {
     averageStars: summary ? Math.round(summary.averageStars * 10) / 10 : null,
     totalRatings: summary ? summary.totalRatings : 0,
-  });
-});
+  };
+}
 
 module.exports = {
   createRequest,
@@ -386,4 +432,6 @@ module.exports = {
   notifyUser,
   submitRating,
   getVetRatingSummary,
+  getVetRatingSummaryForVet,
+  broadcastRequestToOnDutyVets,
 };

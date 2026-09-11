@@ -48,6 +48,16 @@ const vetRequestSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    // Null preserves the original "any available vet" broadcast flow.
+    requestedVeterinarianId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
+    directRequestExpiresAt: { type: Date, default: null },
+    directRequestFallbackAt: { type: Date, default: null },
+    directRequestFallbackNotifiedCount: { type: Number, default: 0 },
     cattleId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Cattle',

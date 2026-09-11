@@ -42,6 +42,8 @@ const initiateTransfer = asyncHandler(async (req, res) => {
     cattleNameSnapshot: cattle.name,
     fromOwnerId: req.user._id,
     toOwnerId: newOwner._id,
+    requestType: 'DIRECT_TRANSFER',
+    initiatedBy: req.user._id,
     status: 'PENDING',
   });
 
@@ -65,7 +67,8 @@ const getMyTransfers = asyncHandler(async (req, res) => {
   })
     .sort({ createdAt: -1 })
     .populate('fromOwnerId', 'name phone')
-    .populate('toOwnerId', 'name phone');
+    .populate('toOwnerId', 'name phone')
+    .populate('initiatedBy', 'name phone');
 
   res.json({ success: true, count: transfers.length, transfers });
 });
@@ -85,17 +88,31 @@ const respondToTransfer = asyncHandler(async (req, res) => {
     throw new Error(`This transfer has already been ${transfer.status.toLowerCase()}.`);
   }
 
-  const isRecipient = String(transfer.toOwnerId) === String(req.user._id);
-  const isInitiator = String(transfer.fromOwnerId) === String(req.user._id);
+  let isBuyerRequest = transfer.requestType === 'BUYER_REQUEST' || (transfer.initiatedBy && String(transfer.initiatedBy) === String(transfer.toOwnerId));
+
+  if (!isBuyerRequest) {
+    const cow = await Cattle.findById(transfer.cattleId);
+    if (cow && ['OPEN_FOR_SALE', 'SALE_PENDING', 'SOLD'].includes(cow.sale?.status)) {
+      isBuyerRequest = true;
+    }
+  }
+
+  // In BUYER_REQUEST: buyer (toOwnerId) requested -> owner (fromOwnerId) receives and responds (ACCEPT/REJECT), buyer can CANCEL
+  // In DIRECT_TRANSFER: owner (fromOwnerId) sent -> recipient (toOwnerId) receives and responds (ACCEPT/REJECT), owner can CANCEL
+  const responderId = isBuyerRequest ? transfer.fromOwnerId : transfer.toOwnerId;
+  const initiatorId = isBuyerRequest ? transfer.toOwnerId : transfer.fromOwnerId;
+
+  const isResponder = String(responderId) === String(req.user._id);
+  const isInitiator = String(initiatorId) === String(req.user._id);
 
   if (action === 'CANCEL') {
     if (!isInitiator) {
       res.status(403);
-      throw new Error('Only the person who started this transfer can cancel it.');
+      throw new Error('Only the person who started this transfer request can cancel it.');
     }
-  } else if (!isRecipient) {
+  } else if (!isResponder) {
     res.status(403);
-    throw new Error('Only the recipient can accept or decline this transfer.');
+    throw new Error('Only the recipient of this transfer request can accept or decline it.');
   }
 
   if (action === 'ACCEPT') {
@@ -112,15 +129,24 @@ const respondToTransfer = asyncHandler(async (req, res) => {
       throw new Error('This cattle record has already changed hands. Please refresh.');
     }
 
+    // If the cattle was on the marketplace, mark the sale as SOLD
+    if (['OPEN_FOR_SALE', 'SALE_PENDING'].includes(updatedCattle.sale?.status)) {
+      updatedCattle.sale.status = 'SOLD';
+      await updatedCattle.save();
+    }
+
     transfer.status = 'ACCEPTED';
     transfer.respondedAt = new Date();
     await transfer.save();
 
+    const notifyTarget = isBuyerRequest ? transfer.toOwnerId : transfer.fromOwnerId;
     await notifyUser({
-      userId: transfer.fromOwnerId,
+      userId: notifyTarget,
       type: 'STATUS_UPDATE',
       title: 'Transfer accepted',
-      message: `${req.user.name} accepted ownership of ${transfer.cattleNameSnapshot} (${transfer.cattleIdSnapshot}).`,
+      message: isBuyerRequest
+        ? `${req.user.name} accepted your ownership request for ${transfer.cattleNameSnapshot} (${transfer.cattleIdSnapshot}). You are now the official owner!`
+        : `${req.user.name} accepted ownership of ${transfer.cattleNameSnapshot} (${transfer.cattleIdSnapshot}).`,
       priority: 'INFO',
       cattleId: transfer.cattleId,
     });
@@ -129,11 +155,21 @@ const respondToTransfer = asyncHandler(async (req, res) => {
     transfer.respondedAt = new Date();
     await transfer.save();
 
+    // If cattle was on marketplace in SALE_PENDING, revert back to OPEN_FOR_SALE
+    const cattle = await Cattle.findById(transfer.cattleId);
+    if (cattle && cattle.sale?.status === 'SALE_PENDING') {
+      cattle.sale.status = 'OPEN_FOR_SALE';
+      await cattle.save();
+    }
+
+    const notifyTarget = isBuyerRequest ? transfer.toOwnerId : transfer.fromOwnerId;
     await notifyUser({
-      userId: transfer.fromOwnerId,
+      userId: notifyTarget,
       type: 'STATUS_UPDATE',
       title: 'Transfer declined',
-      message: `${req.user.name} declined the transfer of ${transfer.cattleNameSnapshot} (${transfer.cattleIdSnapshot}).`,
+      message: isBuyerRequest
+        ? `${req.user.name} declined the ownership request for ${transfer.cattleNameSnapshot} (${transfer.cattleIdSnapshot}).`
+        : `${req.user.name} declined the transfer of ${transfer.cattleNameSnapshot} (${transfer.cattleIdSnapshot}).`,
       priority: 'INFO',
       cattleId: transfer.cattleId,
     });
@@ -141,9 +177,28 @@ const respondToTransfer = asyncHandler(async (req, res) => {
     transfer.status = 'CANCELLED';
     transfer.respondedAt = new Date();
     await transfer.save();
+
+    // If cattle was on marketplace in SALE_PENDING, revert back to OPEN_FOR_SALE
+    const cattle = await Cattle.findById(transfer.cattleId);
+    if (cattle && cattle.sale?.status === 'SALE_PENDING') {
+      cattle.sale.status = 'OPEN_FOR_SALE';
+      await cattle.save();
+    }
   } else {
     res.status(400);
     throw new Error('Invalid action. Must be ACCEPT, REJECT, or CANCEL.');
+  }
+
+  // Real-time synchronization to both parties
+  try {
+    const { getIO } = require('../sockets/io');
+    const io = getIO();
+    if (io) {
+      io.to(`user:${transfer.fromOwnerId}`).emit('transfer_update', { transferId: transfer._id, action });
+      io.to(`user:${transfer.toOwnerId}`).emit('transfer_update', { transferId: transfer._id, action });
+    }
+  } catch {
+    // Socket emit is best-effort
   }
 
   res.json({ success: true, transfer });

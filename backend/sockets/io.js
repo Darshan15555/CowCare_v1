@@ -9,6 +9,10 @@ function initSocket(httpServer) {
       origin: process.env.CLIENT_URL || 'http://localhost:5173',
       credentials: true,
     },
+    // Detect broken proxy/client connections promptly; the browser client
+    // automatically reconnects if the API is restarted during development.
+    pingInterval: 25_000,
+    pingTimeout: 20_000,
   });
 
   // Authenticate every socket connection with the same access token used by the REST API.

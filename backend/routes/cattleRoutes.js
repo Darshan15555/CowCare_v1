@@ -12,6 +12,11 @@ const {
   getMyTransfers,
   respondToTransfer,
 } = require('../controllers/cattleTransferController');
+const {
+  listCowForSale,
+  updateSaleListing,
+  removeCowFromSale,
+} = require('../controllers/marketplaceController');
 const { protect } = require('../middleware/auth');
 const { restrictTo } = require('../middleware/roleCheck');
 const { validate } = require('../middleware/validate');
@@ -20,6 +25,10 @@ const {
   initiateTransferValidators,
   respondToTransferValidators,
 } = require('../validators/cattleTransferValidators');
+const {
+  openForSaleValidators,
+  updateSaleStatusValidators,
+} = require('../validators/marketplaceValidators');
 const upload = require('../middleware/upload');
 
 router.use(protect);
@@ -41,6 +50,26 @@ router.patch(
 );
 
 router.get('/:id', getCattleProfile);
+
+// Cattle Marketplace / Open for sale endpoints
+router.post(
+  '/:id/sale',
+  restrictTo('FARMER'),
+  upload.array('photos', 10),
+  openForSaleValidators,
+  validate,
+  listCowForSale
+);
+router.patch(
+  '/:id/sale',
+  restrictTo('FARMER'),
+  upload.array('photos', 10),
+  updateSaleStatusValidators,
+  validate,
+  updateSaleListing
+);
+router.delete('/:id/sale', restrictTo('FARMER'), removeCowFromSale);
+
 router.patch(
   '/:id',
   restrictTo('FARMER', 'ADMIN'),

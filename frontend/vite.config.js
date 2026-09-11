@@ -15,17 +15,26 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        // Use an explicit loopback address. On some Windows setups `localhost`
+        // resolves to IPv6 first while the API is listening on IPv4, causing
+        // intermittent proxy connection resets.
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
+        timeout: 30_000,
+        proxyTimeout: 30_000,
       },
       '/uploads': {
-        target: 'http://localhost:5000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
+        timeout: 30_000,
+        proxyTimeout: 30_000,
       },
       '/socket.io': {
-        target: 'http://localhost:5000',
+        target: 'ws://127.0.0.1:5000',
         changeOrigin: true,
         ws: true,
+        timeout: 30_000,
+        proxyTimeout: 30_000,
       },
     },
   },

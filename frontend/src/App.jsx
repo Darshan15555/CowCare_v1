@@ -29,6 +29,8 @@ const CattleProfile = lazy(() => import('./pages/farmer/CattleProfile'));
 const BookVisit = lazy(() => import('./pages/farmer/BookVisit'));
 const MyRequests = lazy(() => import('./pages/farmer/MyRequests'));
 const FarmerRequestDetail = lazy(() => import('./pages/farmer/FarmerRequestDetail'));
+const Marketplace = lazy(() => import('./pages/farmer/Marketplace'));
+const MarketplaceCowDetail = lazy(() => import('./pages/farmer/MarketplaceCowDetail'));
 
 const VetDashboard = lazy(() => import('./pages/vet/VetDashboard'));
 const IncomingRequests = lazy(() => import('./pages/vet/IncomingRequests'));
@@ -74,6 +76,8 @@ export default function App() {
                   <Route path="/farmer/cattle" element={<MyCattle />} />
                   <Route path="/farmer/cattle/add" element={<AddCattle />} />
                   <Route path="/farmer/cattle/:id" element={<CattleProfile />} />
+                  <Route path="/farmer/marketplace" element={<Marketplace />} />
+                  <Route path="/farmer/marketplace/:id" element={<MarketplaceCowDetail />} />
                   <Route path="/farmer/transfers" element={<CattleTransfers />} />
                   <Route path="/farmer/book" element={<BookVisit />} />
                   <Route path="/farmer/requests" element={<MyRequests />} />

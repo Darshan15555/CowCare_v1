@@ -13,14 +13,18 @@ const connectDB = require('./config/db');
 const { initSocket, getIO } = require('./sockets/io');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 const { runEscalationSweep, ESCALATION_THRESHOLD_MINUTES } = require('./utils/escalation');
+const { runDirectRequestFallbackSweep, DIRECT_REQUEST_FALLBACK_MINUTES } = require('./utils/directRequestFallback');
 
 const authRoutes = require('./routes/authRoutes');
 const cattleRoutes = require('./routes/cattleRoutes');
 const requestRoutes = require('./routes/requestRoutes');
-const { notifyUser } = require('./controllers/requestController');
+const { notifyUser, broadcastRequestToOnDutyVets } = require('./controllers/requestController');
 const medicalRoutes = require('./routes/medicalRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const marketplaceRoutes = require('./routes/marketplaceRoutes');
+const aiRoutes = require('./routes/aiRoutes');
+const vetRoutes = require('./routes/vetRoutes');
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -81,6 +85,9 @@ app.use('/api/requests', requestRoutes);
 app.use('/api/medical', medicalRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/marketplace', marketplaceRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/vets', vetRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
@@ -103,6 +110,7 @@ if (missingEnvVars.length > 0) {
 }
 
 let escalationInterval = null;
+let directRequestFallbackInterval = null;
 
 const start = async () => {
   await connectDB();
@@ -122,10 +130,15 @@ const start = async () => {
     });
   }, sweepIntervalMs);
   escalationInterval.unref(); // don't keep the process alive just for this timer
+  directRequestFallbackInterval = setInterval(() => {
+    runDirectRequestFallbackSweep({ VetRequest: require('./models/VetRequest'), broadcastRequestToOnDutyVets, notifyUser }).catch((err) => console.error('[Direct request fallback] Sweep failed:', err.message));
+  }, sweepIntervalMs);
+  directRequestFallbackInterval.unref();
 
   console.log(
     `[CowCare API] Emergency escalation sweep active (threshold: ${ESCALATION_THRESHOLD_MINUTES} min).`
   );
+  console.log(`[CowCare API] Direct-request fallback active (after ${DIRECT_REQUEST_FALLBACK_MINUTES} min).`);
 };
 
 start();
@@ -135,6 +148,7 @@ start();
 const shutdown = (signal) => {
   console.log(`[CowCare API] ${signal} received. Shutting down gracefully...`);
   clearInterval(escalationInterval);
+  clearInterval(directRequestFallbackInterval);
   httpServer.close(async () => {
     try {
       await mongoose.connection.close(false);

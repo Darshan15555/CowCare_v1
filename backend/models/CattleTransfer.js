@@ -26,6 +26,17 @@ const cattleTransferSchema = new mongoose.Schema(
       index: true,
     },
 
+    requestType: {
+      type: String,
+      enum: ['DIRECT_TRANSFER', 'BUYER_REQUEST'],
+      default: 'DIRECT_TRANSFER',
+      index: true,
+    },
+    initiatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+
     status: {
       type: String,
       enum: ['PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED'],

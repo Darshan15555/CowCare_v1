@@ -54,6 +54,7 @@ export default function ProfileSettings() {
   const [farmCoords, setFarmCoords] = useState(
     user?.defaultLocation?.lat ? { lat: user.defaultLocation.lat, lng: user.defaultLocation.lng } : null
   );
+  const [preferredLanguage, setPreferredLanguage] = useState(user?.preferredLanguage || 'en');
 
   const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
@@ -78,6 +79,7 @@ export default function ProfileSettings() {
       const payload = { name: form.name, email: form.email || undefined };
       if (isFarmer) {
         payload.farmName = form.farmName;
+        payload.preferredLanguage = preferredLanguage;
         if (farmCoords) {
           payload.defaultLocation = { ...farmCoords, address: form.farmAddress || undefined };
         }
@@ -131,6 +133,22 @@ export default function ProfileSettings() {
               <MapPin size={16} />
               {farmCoords ? 'Location set ✓ (tap to update)' : 'Set Default Farm Location'}
             </button>
+
+            <Field label="AI Chatbot Language">
+              <select
+                value={preferredLanguage}
+                onChange={(e) => setPreferredLanguage(e.target.value)}
+                className="input"
+              >
+                <option value="en">English</option>
+                <option value="kn">ಕನ್ನಡ (Kannada)</option>
+                <option value="ta">தமிழ் (Tamil)</option>
+                <option value="hi">हिन्दी (Hindi)</option>
+                <option value="te">తెలుగు (Telugu)</option>
+                <option value="mr">मराठी (Marathi)</option>
+              </select>
+              <p className="text-xs text-ink-400 mt-1">The AI assistant will respond in this language</p>
+            </Field>
           </>
         ) : (
           <>
