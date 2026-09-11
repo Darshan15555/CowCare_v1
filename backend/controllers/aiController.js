@@ -3,18 +3,15 @@ const Cattle = require('../models/Cattle');
 const MedicalEvent = require('../models/MedicalEvent');
 const VetRequest = require('../models/VetRequest');
 const User = require('../models/User');
-const { generateCowSummary } = require('../services/geminiService');
+const { generateCowChat, generateCowSummary } = require('../services/openaiService');
 
-// @route POST /api/ai/cow-summary
-// @access Private (FARMER, VETERINARIAN, ADMIN)
-const getCattleAiSummary = asyncHandler(async (req, res) => {
-  const { cattleId, question, mode, requestId } = req.body;
-
-  // Handle general marketplace advisory questions when not on a specific cow
-  if (!cattleId || cattleId === 'GENERAL_MARKETPLACE') {
-    const resolvedMode = req.user.role === 'FARMER' ? 'farmer' : mode === 'farmer' ? 'farmer' : 'veterinarian';
-    const userLanguage = req.user.preferredLanguage || 'en';
-    const aiResult = await generateCowSummary({
+/**
+ * Helper to fetch, validate, and authorize cattle access
+ */
+async function loadAuthorizedCattle({ cattleId, user }) {
+  if (!cattleId || cattleId === 'GENERAL_MARKETPLACE' || cattleId === 'MARKETPLACE') {
+    return {
+      isMarketplace: true,
       cattle: {
         cattleId: 'MARKETPLACE',
         name: 'CowCare Livestock Marketplace',
@@ -23,79 +20,97 @@ const getCattleAiSummary = asyncHandler(async (req, res) => {
         status: 'HEALTHY',
         sale: { status: 'OPEN_FOR_SALE' },
       },
-      timeline: [],
-      mode: resolvedMode,
-      question: question || 'What critical veterinary health points should I inspect before purchasing cattle in the marketplace?',
-      language: userLanguage,
-    });
-
-    return res.json({
-      success: true,
-      cattleId: 'MARKETPLACE',
-      mode: resolvedMode,
-      answer: aiResult.answer,
-      isFallback: aiResult.isFallback,
-      model: aiResult.model,
-    });
+    };
   }
 
-  // Find cattle by MongoDB _id or permanent cattleId (e.g., CW-IND-24-000123)
   const isMongoId = /^[0-9a-fA-F]{24}$/.test(cattleId);
   const cattle = isMongoId
     ? await Cattle.findById(cattleId).populate('ownerId', 'name farmName phone')
     : await Cattle.findOne({ cattleId }).populate('ownerId', 'name farmName phone');
 
   if (!cattle || !cattle.isActive) {
-    res.status(404);
-    throw new Error('Cattle record not found.');
+    const error = new Error('Cattle record not found.');
+    error.statusCode = 404;
+    throw error;
   }
 
   // Authorization check
-  const isOwner = String(cattle.ownerId._id || cattle.ownerId) === String(req.user._id);
+  const isOwner = String(cattle.ownerId._id || cattle.ownerId) === String(user._id);
   const isOpenForSale = ['OPEN_FOR_SALE', 'SALE_PENDING'].includes(cattle.sale?.status);
 
-  if (req.user.role === 'FARMER') {
+  if (user.role === 'FARMER') {
     if (!isOwner && !isOpenForSale) {
-      res.status(403);
-      throw new Error('You are not authorized to query AI medical insights for this cattle.');
+      const error = new Error('You are not authorized to query AI medical insights for this cattle.');
+      error.statusCode = 403;
+      throw error;
     }
-  } else if (req.user.role === 'VETERINARIAN') {
-    // Check if vet is assigned, or has request, or cow is open for sale
+  } else if (user.role === 'VETERINARIAN') {
     const hasRequest = await VetRequest.exists({
       cattleId: cattle._id,
-      $or: [{ veterinarianId: req.user._id }, { status: 'REQUESTED' }],
+      $or: [{ veterinarianId: user._id }, { status: 'REQUESTED' }],
     });
-    if (!hasRequest && !isOpenForSale && req.user.role !== 'ADMIN') {
-      res.status(403);
-      throw new Error('You are not authorized to view clinical AI insights for this cattle.');
+    if (!hasRequest && !isOpenForSale && user.role !== 'ADMIN') {
+      const error = new Error('You are not authorized to view clinical AI insights for this cattle.');
+      error.statusCode = 403;
+      throw error;
     }
   }
 
-  // Determine mode:
-  // Farmers are always in 'farmer' mode. Vets default to 'veterinarian' unless explicitly requesting 'farmer' mode.
+  return { isMarketplace: false, cattle };
+}
+
+// @route POST /api/ai/chat
+// @access Private (FARMER, VETERINARIAN, ADMIN)
+const aiChat = asyncHandler(async (req, res) => {
+  const { cattleId, message, question, conversationHistory = [], mode, language, requestId } = req.body;
+  const userPrompt = message || question || '';
+
+  console.log(`[AI Chat] User authenticated: ${req.user._id} (${req.user.role})`);
+
+  const { isMarketplace, cattle } = await loadAuthorizedCattle({
+    cattleId,
+    user: req.user,
+  });
+
   const resolvedMode = req.user.role === 'FARMER' ? 'farmer' : mode === 'farmer' ? 'farmer' : 'veterinarian';
+  const resolvedLanguage = language || req.user.preferredLanguage || 'en';
 
-  // Fetch canonical medical timeline
-  const timeline = await MedicalEvent.find({ cattleId: cattle._id })
-    .sort({ eventDate: -1 })
-    .populate('veterinarianId', 'name specialization');
-
-  // Optional active case context
+  let timeline = [];
   let activeCase = null;
-  if (requestId) {
-    activeCase = await VetRequest.findById(requestId).select('symptoms description urgency createdAt');
+
+  if (!isMarketplace) {
+    console.log(`[AI Chat] Cattle loaded: ${cattle.cattleId} (${cattle.name})`);
+
+    // Fetch canonical medical timeline sorted newest to oldest
+    timeline = await MedicalEvent.find({ cattleId: cattle._id })
+      .sort({ eventDate: -1 })
+      .populate('veterinarianId', 'name specialization phone');
+
+    console.log(`[AI Chat] Medical events loaded: ${timeline.length}`);
+
+    // Optional active consultation case
+    if (requestId) {
+      activeCase = await VetRequest.findById(requestId).select('symptoms problemDescription description urgency createdAt status');
+    }
+  } else {
+    console.log(`[AI Chat] General Marketplace context loaded`);
   }
 
-  const userLanguage = req.user.preferredLanguage || 'en';
+  const historyLength = Array.isArray(conversationHistory) ? conversationHistory.length : 0;
+  console.log(`[AI Chat] Conversation history turns: ${historyLength}`);
+  console.log(`[AI Chat] Sending grounded context to model`);
 
-  const aiResult = await generateCowSummary({
+  const aiResult = await generateCowChat({
     cattle,
     timeline,
     mode: resolvedMode,
-    question: question || '',
+    message: userPrompt,
+    conversationHistory,
     activeCase,
-    language: userLanguage,
+    language: resolvedLanguage,
   });
+
+  console.log(`[AI Chat] Response received (model: ${aiResult.model || 'fallback'}, isFallback: ${aiResult.isFallback})`);
 
   res.json({
     success: true,
@@ -107,6 +122,12 @@ const getCattleAiSummary = asyncHandler(async (req, res) => {
   });
 });
 
+// @route POST /api/ai/cow-summary
+// @access Private (FARMER, VETERINARIAN, ADMIN)
+// Backwards-compatible route forwarding directly to aiChat logic
+const getCattleAiSummary = aiChat;
+
 module.exports = {
+  aiChat,
   getCattleAiSummary,
 };

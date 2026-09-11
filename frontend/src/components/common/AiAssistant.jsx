@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Sparkles, Send, Bot, User as UserIcon, X, RefreshCw, AlertCircle, MessageSquare, Stethoscope } from 'lucide-react';
+import { Sparkles, Send, Bot, User as UserIcon, X, RefreshCw, AlertCircle, MessageSquare, Stethoscope, RotateCcw } from 'lucide-react';
 import { aiApi } from '../../api/aiApi';
 import { useAuth } from '../../context/AuthContext';
 import { getErrorMessage } from '../../utils/errorMessage';
@@ -8,7 +8,7 @@ import doctorAvatar from '../../assets/ai_doctor_avatar.jpg';
 
 /**
  * Lightweight markdown renderer for AI chat messages.
- * Handles: ### headers, **bold**, *italic*, - bullet lists, and newlines.
+ * Handles: ### headers, **bold**, *italic*, - bullet lists, tables, and newlines.
  */
 function MarkdownText({ text }) {
   if (!text) return null;
@@ -19,16 +19,16 @@ function MarkdownText({ text }) {
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
 
-    // Skip empty lines but preserve spacing
+    // Skip empty lines but preserve clean rhythm
     if (line.trim() === '') {
-      elements.push(<div key={i} className="h-2" />);
+      elements.push(<div key={i} className="h-1.5" />);
       continue;
     }
 
     // Headers: ### → h3, ## → h2
     if (line.startsWith('### ')) {
       elements.push(
-        <h3 key={i} className="text-sm font-bold text-ink-900 mt-1 mb-1">
+        <h3 key={i} className="text-xs sm:text-sm font-bold text-ink-900 mt-1 mb-0.5">
           {renderInline(line.slice(4))}
         </h3>
       );
@@ -36,7 +36,7 @@ function MarkdownText({ text }) {
     }
     if (line.startsWith('## ')) {
       elements.push(
-        <h2 key={i} className="text-sm font-bold text-ink-900 mt-2 mb-1">
+        <h2 key={i} className="text-xs sm:text-sm font-bold text-ink-900 mt-1.5 mb-0.5">
           {renderInline(line.slice(3))}
         </h2>
       );
@@ -48,8 +48,8 @@ function MarkdownText({ text }) {
       const content = line.replace(/^\s*[-*]\s+/, '');
       elements.push(
         <div key={i} className="flex gap-1.5 ml-1 my-0.5">
-          <span className="text-pasture-600 shrink-0 mt-0.5">•</span>
-          <span>{renderInline(content)}</span>
+          <span className="text-pasture-600 shrink-0 mt-0.5 text-xs">•</span>
+          <span className="text-xs text-ink-800 leading-relaxed">{renderInline(content)}</span>
         </div>
       );
       continue;
@@ -57,7 +57,7 @@ function MarkdownText({ text }) {
 
     // Regular paragraph
     elements.push(
-      <p key={i} className="my-0.5">
+      <p key={i} className="my-0.5 text-xs text-ink-800 leading-relaxed">
         {renderInline(line)}
       </p>
     );
@@ -69,29 +69,23 @@ function MarkdownText({ text }) {
 /** Renders inline markdown: **bold**, *italic* */
 function renderInline(text) {
   if (!text) return text;
-  // Split by **bold** and *italic* patterns
   const parts = [];
-  // Match **bold** or *italic* segments
   const regex = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
   let lastIndex = 0;
   let match;
 
   while ((match = regex.exec(text)) !== null) {
-    // Add text before the match
     if (match.index > lastIndex) {
       parts.push(text.slice(lastIndex, match.index));
     }
     if (match[2]) {
-      // **bold**
       parts.push(<strong key={match.index} className="font-semibold text-ink-900">{match[2]}</strong>);
     } else if (match[3]) {
-      // *italic*
-      parts.push(<em key={match.index}>{match[3]}</em>);
+      parts.push(<em key={match.index} className="italic text-ink-800">{match[3]}</em>);
     }
     lastIndex = match.index + match[0].length;
   }
 
-  // Add remaining text
   if (lastIndex < text.length) {
     parts.push(text.slice(lastIndex));
   }
@@ -110,48 +104,48 @@ const LANGUAGE_LABELS = {
 
 const FARMER_PROMPTS = {
   en: [
-    "Summarize this cow's health in simple words",
-    "What health problems has this cow had?",
-    "Is this cow safe to buy?",
-    "What should I check before buying?",
+    "What happened during her last visit?",
+    "Are her vaccinations recorded?",
+    "Was she treated for any serious illness?",
+    "Is she safe to buy based on her history?",
   ],
   kn: [
-    'ಈ ಹಸುವಿನ ಆರೋಗ್ಯ ಹೇಗಿದೆ?',
-    'ಈ ಹಸುಗೆ ಏನೇನು ರೋಗಗಳು ಬಂದಿದ್ದವು?',
+    'ಹಿಂದಿನ ಭೇಟಿಯಲ್ಲಿ ಏನಾಗಿತ್ತು?',
+    'ಈ ಹಸುವಿಗೆ ಲಸಿಕೆ ಹಾಕಿಸಿದ್ದಾರಾ?',
+    'ಏನೇನು ರೋಗಗಳಿಗೆ ಚಿಕಿತ್ಸೆ ನೀಡಲಾಗಿದೆ?',
     'ಈ ಹಸುವನ್ನು ಕೊಳ್ಳಬಹುದೇ?',
-    'ಲಸಿಕೆ ಹಾಕಿಸಿದ್ದಾರಾ?',
   ],
   ta: [
-    'இந்த மாட்டின் ஆரோக்கியம் எப்படி?',
-    'என்ன நோய்கள் வந்திருந்தது?',
+    'கடைசி விசிட்டில் என்ன நடந்தது?',
+    'தடுப்பூசி போடப்பட்டதா?',
+    'என்ன சிகிச்சைகள் செய்யப்பட்டன?',
     'இந்த மாட்டை வாங்கலாமா?',
-    'தடுப்பூசி போட்டிருக்காங்களா?',
   ],
   hi: [
-    'इस गाय की सेहत कैसी है?',
-    'क्या बीमारियां आई हैं इसे?',
-    'क्या यह गाय खरीदना सही है?',
-    'टीकाकरण हुआ है क्या?',
+    'पिछली बार डॉक्टर ने क्या देखा था?',
+    'क्या टीकाकरण का रिकॉर्ड है?',
+    'क्या कोई गंभीर बीमारी की दवा दी गई?',
+    'क्या यह गाय खरीदना सुरक्षित है?',
   ],
   te: [
-    'ఈ ఆవు ఆరోగ్యం ఎలా ఉంది?',
-    'ఏమి వ్యాధులు వచ్చాయి?',
+    'చివరి విజిట్‌లో డాక్టర్ ఏమి చెప్పారు?',
+    'టీకాల రికార్డు ఉందా?',
+    'ఏమి మందులు ఇచ్చారు?',
     'ఈ ఆవును కొనవచ్చా?',
-    'టీకాలు వేయించారా?',
   ],
   mr: [
-    'या गायीचे आरोग्य कसे आहे?',
-    'कोणते आजार आले होते?',
-    'ही गाय विकत घ्यायला चालेल का?',
-    'लसीकरण झाले आहे का?',
+    'शेवटच्या तपासणीत काय आढळले?',
+    'लसीकरणाची नोंद आहे का?',
+    'कोणती औषधे देण्यात आली होती?',
+    'ही गाय खरेदी करणे योग्य आहे का?',
   ],
 };
 
 const VET_PROMPTS = [
-  'Differential diagnosis for bovine respiratory disease',
-  'Treatment & antibiotic protocol for acute mastitis',
-  "Summarize patient's previous clinical history",
-  'Dosage & withdrawal period recommendations',
+  'Summarize recent clinical events and diagnoses',
+  'Review antimicrobial treatments and withdrawal intervals',
+  'Differential diagnoses for presenting symptoms',
+  'Check vaccination and scheduled follow-up status',
 ];
 
 export default function AiAssistant({
@@ -170,6 +164,7 @@ export default function AiAssistant({
   const [hasInitialized, setHasInitialized] = useState(false);
   const [lastFailedQuery, setLastFailedQuery] = useState(null);
   const chatEndRef = useRef(null);
+  const textareaRef = useRef(null);
 
   const isVet = mode === 'veterinarian' || user?.role === 'VETERINARIAN';
   const userLang = user?.preferredLanguage || 'en';
@@ -185,7 +180,7 @@ export default function AiAssistant({
     scrollToBottom();
   }, [messages, isLoading]);
 
-  // Initial summary on first open
+  // Initial welcome message or summary on first open
   const fetchInitialSummary = async () => {
     if (hasInitialized) return;
     setHasInitialized(true);
@@ -205,10 +200,12 @@ export default function AiAssistant({
 
     setIsLoading(true);
     try {
-      const res = await aiApi.getCowSummary({
+      const res = await aiApi.chat({
         cattleId,
-        question: '',
+        message: '',
+        conversationHistory: [],
         mode,
+        language: userLang,
         requestId,
       });
 
@@ -242,6 +239,14 @@ export default function AiAssistant({
     }
   };
 
+  const handleResetConversation = () => {
+    setMessages([]);
+    setHasInitialized(false);
+    setLastFailedQuery(null);
+    setInputQuery('');
+    fetchInitialSummary();
+  };
+
   const handleSend = async (customPrompt) => {
     const promptToSend = (customPrompt || inputQuery).trim();
     if (!promptToSend || isLoading) return;
@@ -250,7 +255,17 @@ export default function AiAssistant({
       id: Date.now().toString(),
       role: 'user',
       text: promptToSend,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
+
+    // Extract conversation history for memory (last 8 turns)
+    const conversationHistory = messages
+      .filter((m) => !m.isError && m.text)
+      .slice(-8)
+      .map((m) => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.text,
+      }));
 
     setMessages((prev) => [...prev, userMsg]);
     setInputQuery('');
@@ -258,10 +273,12 @@ export default function AiAssistant({
     setLastFailedQuery(null);
 
     try {
-      const res = await aiApi.getCowSummary({
+      const res = await aiApi.chat({
         cattleId: cattleId || 'GENERAL_MARKETPLACE',
-        question: promptToSend,
+        message: promptToSend,
+        conversationHistory,
         mode,
+        language: userLang,
         requestId,
       });
 
@@ -272,6 +289,7 @@ export default function AiAssistant({
           role: 'assistant',
           text: res.data.answer,
           isFallback: res.data.isFallback,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
     } catch (err) {
@@ -281,7 +299,7 @@ export default function AiAssistant({
         {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          text: "I couldn't generate the summary right now. You can review the medical timeline directly.",
+          text: "I couldn't process this request right now. You can check the medical timeline directly or click Retry.",
           isError: true,
         },
       ]);
@@ -311,8 +329,8 @@ export default function AiAssistant({
                 </p>
                 <p className="text-[11px] text-ink-600 leading-snug mt-0.5">
                   {isVet
-                    ? "I'm your Clinical Co-Pilot. Ready for vitals assessment and clinical differentials."
-                    : "I'm your CowCare AI Assistant. How can I help you today?"}
+                    ? "Clinical Co-Pilot active. Ask about differential diagnoses, dosages, or cattle history."
+                    : "CowCare AI Assistant ready. Ask about health, vaccines, milk yield, or purchase advice!"}
                 </p>
               </div>
               <button
@@ -327,14 +345,14 @@ export default function AiAssistant({
                 ) : (
                   <>
                     <Sparkles className="w-3 h-3 text-amber-alert-500" />
-                    <span>Ask me anything!</span>
+                    <span>Chat with CowCare AI</span>
                   </>
                 )}
               </button>
             </div>
           )}
 
-          {/* Circular Trigger Button (Clinical Doctor Avatar for Vet, Farmer photo for Farmer) */}
+          {/* Circular Trigger Button */}
           <button
             onClick={handleToggle}
             className={`group relative flex items-center justify-center w-16 h-16 rounded-full shadow-2xl hover:scale-105 transition-transform overflow-visible ${
@@ -354,26 +372,24 @@ export default function AiAssistant({
                 }}
               />
             </div>
-            {/* Stethoscope Badge for Doctor / AI badge */}
             {isVet && (
               <span className="absolute -bottom-1 -left-1 flex h-6 w-6 items-center justify-center rounded-full bg-serum-700 text-white border-2 border-white shadow-sm">
                 <Stethoscope className="w-3.5 h-3.5" />
               </span>
             )}
-            {/* Red Notification Badge */}
             <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-vital-600 text-white font-bold text-[10px] border-2 border-white shadow-xs">
-              1
+              AI
             </span>
           </button>
         </div>
       )}
 
-      {/* Expandable Slide-over AI Panel */}
+      {/* Expandable Mini ChatGPT-Style Panel */}
       {isOpen && (
-        <div className="w-[92vw] sm:w-[420px] max-h-[85vh] h-[580px] bg-mist-50/98 backdrop-blur-md rounded-3xl shadow-2xl border border-mist-300 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-200">
+        <div className="w-[94vw] sm:w-[440px] max-h-[88vh] h-[600px] bg-mist-50/98 backdrop-blur-md rounded-3xl shadow-2xl border border-mist-300 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-200">
           {/* Header */}
           <div
-            className={`px-4 py-3.5 text-white flex items-center justify-between border-b ${
+            className={`px-4 py-3 text-white flex items-center justify-between border-b ${
               isVet
                 ? 'bg-gradient-to-r from-serum-900 to-serum-800 border-serum-700'
                 : 'bg-pasture-800 border-pasture-700'
@@ -393,7 +409,7 @@ export default function AiAssistant({
               <div>
                 <div className="flex items-center gap-1.5">
                   <h2 className="text-sm font-display font-bold text-white tracking-tight">
-                    {isVet ? 'Clinical AI Co-Pilot' : 'CowCare AI Assistant'}
+                    {isVet ? 'Clinical AI Co-Pilot' : 'CowCare AI'}
                   </h2>
                   <span
                     className={`text-[9px] font-sans uppercase font-bold px-1.5 py-0.5 rounded border ${
@@ -402,7 +418,7 @@ export default function AiAssistant({
                         : 'bg-pasture-700 text-pasture-100 border-pasture-600'
                     }`}
                   >
-                    {isVet ? 'Clinical Mode' : 'Health Interpreter'}
+                    {isVet ? 'Clinical' : 'Assistant'}
                   </span>
                   {!isVet && userLang !== 'en' && (
                     <span className="text-[9px] font-sans uppercase font-bold px-1.5 py-0.5 rounded border bg-amber-alert-100 text-amber-alert-800 border-amber-alert-200">
@@ -411,26 +427,23 @@ export default function AiAssistant({
                   )}
                 </div>
                 <p className="text-[11px] text-mist-200 font-sans truncate max-w-[220px]">
-                  {cattleId ? `${cattleName} (${cattleId})` : isVet ? 'Differential Diagnosis & Treatment Guidance' : 'Livestock Health Intelligence'}
+                  {cattleId ? `${cattleName} • ${cattleId}` : isVet ? 'Differential Diagnoses & Protocol Guidance' : 'Livestock Health Intelligence'}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-1">
               <button
-                onClick={() => {
-                  setHasInitialized(false);
-                  fetchInitialSummary();
-                }}
+                onClick={handleResetConversation}
                 className="p-1.5 text-pasture-200 hover:text-white hover:bg-pasture-700/50 rounded-xl transition-colors"
-                title="Refresh summary"
+                title="Restart conversation"
               >
-                <RefreshCw className="w-4 h-4" />
+                <RotateCcw className="w-4 h-4" />
               </button>
               <button
                 onClick={handleToggle}
                 className="p-1.5 text-pasture-200 hover:text-white hover:bg-pasture-700/50 rounded-xl transition-colors"
-                title="Close assistant"
+                title="Close chat"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -441,7 +454,7 @@ export default function AiAssistant({
           <div className="bg-mist-100 px-3.5 py-1.5 border-b border-mist-200 text-[10px] text-ink-600 flex items-center gap-1.5">
             <AlertCircle className="w-3.5 h-3.5 text-pasture-700 shrink-0" />
             <p className="leading-tight font-sans">
-              Grounded in verified CowCare records. The AI does not prescribe medicines or replace physical vet examination.
+              Grounded in verified CowCare MongoDB records. Conversational memory active.
             </p>
           </div>
 
@@ -488,7 +501,7 @@ export default function AiAssistant({
                         onClick={() => handleSend(lastFailedQuery)}
                         className="mt-2 block px-2.5 py-1 rounded-md bg-vital-600 text-white text-[10px] font-semibold hover:bg-vital-700"
                       >
-                        Retry
+                        Retry question
                       </button>
                     )}
                   </div>
@@ -501,10 +514,10 @@ export default function AiAssistant({
               );
             })}
 
-            {/* Loading State per Spec 36 */}
+            {/* Loading / Typing Indicator */}
             {isLoading && (
-              <div className="flex gap-2.5 items-start text-xs">
-                <div className="w-7 h-7 rounded-full overflow-hidden border border-pasture-700/40 shrink-0 animate-pulse flex items-center justify-center">
+              <div className="flex gap-2.5 items-start text-xs animate-in fade-in duration-200">
+                <div className="w-7 h-7 rounded-full overflow-hidden border border-pasture-700/40 shrink-0 flex items-center justify-center">
                   {isVet ? (
                     <div className="w-full h-full bg-serum-700 text-white flex items-center justify-center">
                       <Stethoscope className="w-3.5 h-3.5 text-serum-100" />
@@ -520,50 +533,67 @@ export default function AiAssistant({
                     />
                   )}
                 </div>
-                <div className="bg-white px-4 py-2.5 rounded-2xl border border-mist-200 text-ink-600 flex items-center gap-2 shadow-xs">
-                  <span className="w-2 h-2 rounded-full bg-pasture-700 animate-ping"></span>
-                  <span className="text-[11px] font-medium">Reviewing CowCare records...</span>
+                <div className="bg-white px-3.5 py-2.5 rounded-2xl border border-mist-200 text-ink-600 flex items-center gap-2 shadow-xs">
+                  <span className="flex gap-1 items-center">
+                    <span className="w-1.5 h-1.5 rounded-full bg-pasture-600 animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-pasture-600 animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-pasture-600 animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </span>
+                  <span className="text-[11px] font-medium text-ink-500">
+                    {isVet ? 'Reviewing clinical timeline...' : 'Consulting records for this cow...'}
+                  </span>
                 </div>
               </div>
             )}
             <div ref={chatEndRef} />
           </div>
 
-          {/* Suggested Prompts per Spec 22 */}
-          <div className="px-3 py-2 bg-mist-100 border-t border-mist-200 flex gap-1.5 overflow-x-auto no-scrollbar">
+          {/* Quick Prompts Carousel */}
+          <div className="px-3 py-1.5 bg-mist-100 border-t border-mist-200 flex gap-1.5 overflow-x-auto no-scrollbar">
             {quickPrompts.map((prompt, i) => (
               <button
                 key={i}
                 disabled={isLoading}
                 onClick={() => handleSend(prompt)}
-                className="text-[10px] font-sans whitespace-nowrap px-2.5 py-1.5 rounded-full bg-white text-ink-700 border border-mist-300 hover:border-pasture-600 hover:text-pasture-700 transition-colors shrink-0 shadow-xs disabled:opacity-50"
+                className="text-[10px] font-sans whitespace-nowrap px-2.5 py-1 rounded-full bg-white text-ink-700 border border-mist-300 hover:border-pasture-600 hover:text-pasture-700 transition-colors shrink-0 shadow-xs disabled:opacity-50"
               >
                 {prompt}
               </button>
             ))}
           </div>
 
-          {/* Input Footer */}
+          {/* Input Footer: ChatGPT Style */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleSend();
             }}
-            className="p-3 bg-white border-t border-mist-200 flex items-center gap-2"
+            className="p-3 bg-white border-t border-mist-200 flex items-end gap-2"
           >
-            <input
-              type="text"
+            <textarea
+              ref={textareaRef}
+              rows={1}
               value={inputQuery}
               onChange={(e) => setInputQuery(e.target.value)}
-              placeholder={isVet ? 'Ask clinical co-pilot...' : 'Ask about vaccines, mastitis, health...'}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder={
+                isVet
+                  ? 'Ask clinical co-pilot... (Enter to send)'
+                  : `Ask about ${cattleName || 'this cow'}... (Enter to send)`
+              }
               disabled={isLoading}
-              className="flex-1 text-xs px-3.5 py-2.5 rounded-xl bg-mist-50 border border-mist-300 focus:outline-none focus:ring-1 focus:ring-pasture-600 focus:border-pasture-600 text-ink-900 placeholder:text-ink-400"
+              className="flex-1 text-xs px-3.5 py-2.5 rounded-xl bg-mist-50 border border-mist-300 focus:outline-none focus:ring-1 focus:ring-pasture-600 focus:border-pasture-600 text-ink-900 placeholder:text-ink-400 resize-none max-h-24 leading-relaxed font-sans"
             />
             <button
               type="submit"
               disabled={isLoading || !inputQuery.trim()}
               className="p-2.5 rounded-xl bg-pasture-700 text-white hover:bg-pasture-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-xs shrink-0"
-              title="Send question"
+              title="Send message"
             >
               <Send className="w-4 h-4" />
             </button>

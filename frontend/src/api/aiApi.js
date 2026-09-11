@@ -1,11 +1,23 @@
 import axiosClient from './axiosClient';
 
 export const aiApi = {
-  // Query Dual-Mode Gemini AI for cattle summary or health history questions
-  getCowSummary: ({ cattleId, question, mode, requestId }) =>
-    axiosClient.post('/ai/cow-summary', {
+  // Conversational Chat with CowCare AI (Grounded in MongoDB with Conversation Memory)
+  chat: ({ cattleId, message, conversationHistory = [], mode, language, requestId }) =>
+    axiosClient.post('/ai/chat', {
       cattleId,
-      question,
+      message,
+      conversationHistory,
+      mode,
+      language,
+      requestId,
+    }),
+
+  // Backwards-compatible Cow Summary helper
+  getCowSummary: ({ cattleId, question, mode, requestId }) =>
+    axiosClient.post('/ai/chat', {
+      cattleId,
+      message: question,
+      conversationHistory: [],
       mode,
       requestId,
     }),
