@@ -34,6 +34,7 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import StatusBadge from '../../components/common/StatusBadge';
 import AiAssistant from '../../components/common/AiAssistant';
 import { CATTLE_STATUS } from '../../utils/constants';
+import { resolveImageUrl } from '../../utils/imageUrl';
 
 const EVENT_ICON = {
   VISIT: Stethoscope,
@@ -171,7 +172,7 @@ export default function MarketplaceCowDetail() {
   const statusCfg = CATTLE_STATUS[cattle.status] || CATTLE_STATUS.HEALTHY;
   const vaccinations = timeline.filter((e) => e.eventType === 'VACCINATION');
 
-  const allPhotos =
+  const rawPhotos =
     cattle.sale?.photos && cattle.sale.photos.length > 0
       ? cattle.sale.photos
       : cattle.photos && cattle.photos.length > 0
@@ -179,6 +180,8 @@ export default function MarketplaceCowDetail() {
       : cattle.photoUrl
       ? [cattle.photoUrl]
       : [];
+
+  const allPhotos = rawPhotos.map(resolveImageUrl).filter(Boolean);
 
   const currentPhoto = allPhotos[activePhotoIdx] || allPhotos[0] || null;
 

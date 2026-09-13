@@ -5,6 +5,7 @@ import { cattleApi } from '../../api/cattleApi';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import AiAssistant from '../../components/common/AiAssistant';
 import { CATTLE_STATUS } from '../../utils/constants';
+import { resolveImageUrl } from '../../utils/imageUrl';
 
 const EVENT_ICON = { VISIT: Stethoscope, VACCINATION: Syringe, TREATMENT: Pill, FOLLOW_UP: CalendarClock };
 const EVENT_ICON_BG = {
@@ -40,8 +41,8 @@ export default function CattleHistoryView() {
       <div className="rounded-xl border border-mist-200 bg-white p-4 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-pasture-50">
-            {cattle.photoUrl ? (
-              <img src={cattle.photoUrl} alt={cattle.name} className="h-full w-full object-cover" />
+            {resolveImageUrl(cattle.photoUrl) ? (
+              <img src={resolveImageUrl(cattle.photoUrl)} alt={cattle.name} className="h-full w-full object-cover" />
             ) : (
               <span className="text-2xl">🐄</span>
             )}

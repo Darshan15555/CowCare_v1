@@ -4,6 +4,7 @@ const VetRequest = require('../models/VetRequest');
 const Cattle = require('../models/Cattle');
 const { generateMedicalEventId } = require('../utils/idGenerators');
 const { notifyUser } = require('./requestController');
+const { uploadToCloudinary } = require('../services/cloudinaryService');
 
 // @route POST /api/medical/complete/:requestId
 // @access Private (VETERINARIAN, must be assigned and request must be IN_PROGRESS)
@@ -45,7 +46,12 @@ const completeVisit = asyncHandler(async (req, res) => {
 
   const cattle = await Cattle.findById(request.cattleId);
   const eventId = await generateMedicalEventId();
-  const examPhotos = (req.files || []).map((f) => `/uploads/${f.filename}`);
+  const examPhotos = await Promise.all(
+    (req.files || []).map(async (f) => {
+      const result = await uploadToCloudinary(f.buffer, { folder: 'cowcare/medical' });
+      return result.secure_url;
+    })
+  );
 
   const medicalEvent = await MedicalEvent.create({
     eventId,

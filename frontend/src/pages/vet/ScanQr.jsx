@@ -26,12 +26,16 @@ export default function ScanQr() {
   };
 
   const handleDecoded = async (decodedText) => {
-    let cattleId = decodedText;
+    let cattleId = decodedText.trim();
     try {
       const parsed = JSON.parse(decodedText);
       if (parsed?.cattleId) cattleId = parsed.cattleId;
     } catch {
-      // Not JSON — treat the raw scanned text as the cattle ID.
+      // Not JSON — check if it's a URL containing /qr/cattle/
+      if (cattleId.includes('/qr/cattle/')) {
+        const parts = cattleId.split('/qr/cattle/');
+        cattleId = decodeURIComponent(parts[parts.length - 1].split('?')[0].split('#')[0]);
+      }
     }
     await stopScanner();
     resolveCattleId(cattleId);

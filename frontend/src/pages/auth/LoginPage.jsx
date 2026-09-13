@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Phone, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { getErrorMessage } from '../../utils/errorMessage';
@@ -12,6 +12,7 @@ const ROLE_HOME = { FARMER: '/farmer', VETERINARIAN: '/vet', ADMIN: '/admin' };
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [form, setForm] = useState({ phone: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -22,7 +23,8 @@ export default function LoginPage() {
     try {
       const user = await login(form.phone, form.password);
       toast.success(`Welcome back, ${user.name}!`);
-      navigate(ROLE_HOME[user.role] || '/');
+      const returnTo = location.state?.from;
+      navigate(returnTo || ROLE_HOME[user.role] || '/');
     } catch (err) {
       toast.error(getErrorMessage(err, 'Login failed. Please try again.'));
     } finally {

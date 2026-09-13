@@ -10,6 +10,7 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import PriorityBadge from '../../components/common/PriorityBadge';
 import StatusBadge from '../../components/common/StatusBadge';
 import AiAssistant from '../../components/common/AiAssistant';
+import { resolveImageUrl } from '../../utils/imageUrl';
 
 const NEXT_STATUS_ACTION = {
   ON_THE_WAY: { next: 'ARRIVED', label: 'Mark Arrived' },
@@ -196,13 +197,13 @@ export default function VetRequestDetail() {
         {request.voiceNoteUrl && (
           <div className="mt-3 flex items-center gap-2 rounded-lg bg-serum-50 p-2.5">
             <span className="text-base">🎙️</span>
-            <audio controls src={request.voiceNoteUrl} className="h-9 flex-1" />
+            <audio controls src={resolveImageUrl(request.voiceNoteUrl)} className="h-9 flex-1" />
           </div>
         )}
         {request.attachments?.length > 0 && (
           <div className="mt-3 flex gap-2 overflow-x-auto">
             {request.attachments.map((url) => (
-              <img key={url} src={url} alt="attachment" className="h-20 w-20 rounded-lg object-cover" />
+              <img key={url} src={resolveImageUrl(url)} alt="attachment" className="h-20 w-20 rounded-lg object-cover" />
             ))}
           </div>
         )}

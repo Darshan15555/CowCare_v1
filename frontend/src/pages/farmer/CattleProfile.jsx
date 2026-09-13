@@ -19,6 +19,10 @@ import {
   CheckCircle2,
   AlertCircle,
   Image as ImageIcon,
+  RefreshCw,
+  ExternalLink,
+  Pencil,
+  X,
 } from 'lucide-react';
 import { getErrorMessage } from '../../utils/errorMessage';
 import { cattleApi } from '../../api/cattleApi';
@@ -26,6 +30,7 @@ import { marketplaceApi } from '../../api/marketplaceApi';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import AiAssistant from '../../components/common/AiAssistant';
 import { CATTLE_STATUS } from '../../utils/constants';
+import { resolveImageUrl } from '../../utils/imageUrl';
 
 const EVENT_ICON = {
   VISIT: Stethoscope,
@@ -58,6 +63,24 @@ export default function CattleProfile() {
   const [showTransferForm, setShowTransferForm] = useState(false);
   const [transferPhone, setTransferPhone] = useState('');
   const [isTransferring, setIsTransferring] = useState(false);
+  const [isRegeneratingQr, setIsRegeneratingQr] = useState(false);
+
+  // Edit Cattle Modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    breed: '',
+    gender: 'FEMALE',
+    dateOfBirth: '',
+    estimatedAgeYears: '',
+    color: '',
+    identifyingMarks: '',
+    status: 'HEALTHY',
+  });
+  const [editPhotoFile, setEditPhotoFile] = useState(null);
+  const [editPhotoPreview, setEditPhotoPreview] = useState('');
+  const [bannerImgError, setBannerImgError] = useState(false);
 
   // Marketplace sale form state
   const [salePrice, setSalePrice] = useState('');
@@ -142,6 +165,105 @@ export default function CattleProfile() {
     toast.success('Cattle ID copied.');
   };
 
+  const handleRegenerateQr = async () => {
+    setIsRegeneratingQr(true);
+    try {
+      const { data } = await cattleApi.regenerateQr(cattle._id);
+      setData((prev) => ({
+        ...prev,
+        cattle: {
+          ...prev.cattle,
+          qrCodeDataUrl: data.qrCodeDataUrl,
+        },
+      }));
+      toast.success('QR Code regenerated with web URL!');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to regenerate QR code.'));
+    } finally {
+      setIsRegeneratingQr(false);
+    }
+  };
+
+  const copyPassportUrl = () => {
+    const url = `${window.location.origin}/qr/cattle/${cattle.cattleId}`;
+    navigator.clipboard.writeText(url);
+    toast.success('Passport link copied to clipboard!');
+  };
+
+  const openEditModal = () => {
+    if (!cattle) return;
+    setEditForm({
+      name: cattle.name || '',
+      breed: cattle.breed || '',
+      gender: cattle.gender || 'FEMALE',
+      dateOfBirth: cattle.dateOfBirth ? cattle.dateOfBirth.split('T')[0] : '',
+      estimatedAgeYears:
+        cattle.estimatedAgeYears !== undefined && cattle.estimatedAgeYears !== null
+          ? String(cattle.estimatedAgeYears)
+          : '',
+      color: cattle.color || '',
+      identifyingMarks: cattle.identifyingMarks || '',
+      status: cattle.status || 'HEALTHY',
+    });
+    setEditPhotoFile(null);
+    setEditPhotoPreview(resolveImageUrl(cattle.photoUrl) || '');
+    setShowEditModal(true);
+  };
+
+  const handleEditPhotoSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be under 5MB.');
+      return;
+    }
+    setEditPhotoFile(file);
+    setEditPhotoPreview(URL.createObjectURL(file));
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!editForm.name.trim()) {
+      toast.error('Cattle name is required.');
+      return;
+    }
+    setIsEditing(true);
+    try {
+      const formData = new FormData();
+      formData.append('name', editForm.name.trim());
+      formData.append('breed', editForm.breed.trim());
+      formData.append('gender', editForm.gender);
+      formData.append('status', editForm.status);
+      formData.append('color', editForm.color.trim());
+      formData.append('identifyingMarks', editForm.identifyingMarks.trim());
+      if (editForm.estimatedAgeYears !== '') {
+        formData.append('estimatedAgeYears', editForm.estimatedAgeYears);
+      }
+      if (editForm.dateOfBirth) {
+        formData.append('dateOfBirth', editForm.dateOfBirth);
+      }
+      if (editPhotoFile) {
+        formData.append('photo', editPhotoFile);
+      }
+
+      const res = await cattleApi.update(cattle._id, formData);
+      setData((prev) => ({
+        ...prev,
+        cattle: {
+          ...prev.cattle,
+          ...res.data.cattle,
+        },
+      }));
+      setBannerImgError(false);
+      setShowEditModal(false);
+      toast.success(`${res.data.cattle.name || 'Cattle'} updated successfully!`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to update cattle details.'));
+    } finally {
+      setIsEditing(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       {/* Health passport header */}
@@ -152,12 +274,26 @@ export default function CattleProfile() {
         </div>
 
         <div className="flex flex-col gap-4 bg-gradient-to-br from-pasture-700 via-pasture-600 to-pasture-500 p-5 text-white sm:flex-row sm:items-end">
-          <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-white/50 bg-white/10">
-            {cattle.photoUrl ? (
-              <img src={cattle.photoUrl} alt={cattle.name} className="h-full w-full object-cover" />
+          <div className="group relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-white/50 bg-white/10 shadow-inner">
+            {resolveImageUrl(cattle.photoUrl) && !bannerImgError ? (
+              <img
+                src={resolveImageUrl(cattle.photoUrl)}
+                alt={cattle.name}
+                onError={() => setBannerImgError(true)}
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
             ) : (
-              <span className="text-4xl">🐄</span>
+              <span className="text-4xl select-none">🐄</span>
             )}
+            <button
+              type="button"
+              onClick={openEditModal}
+              className="absolute inset-0 flex flex-col items-center justify-center bg-ink-950/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+              title="Change cattle photo or edit details"
+            >
+              <Camera size={20} />
+              <span className="mt-1 text-[10px] font-semibold tracking-wide">Edit</span>
+            </button>
           </div>
           <div className="flex-1 pr-14">
             <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-pasture-100/80">
@@ -178,23 +314,34 @@ export default function CattleProfile() {
 
         <div className="space-y-3 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <button
-              onClick={copyId}
-              className="flex items-center gap-2 rounded-lg bg-mist-100 px-3 py-2 font-data text-sm font-medium text-ink-800 hover:bg-mist-200"
-              title="Copy permanent cattle ID"
-            >
-              {cattle.cattleId} <Copy size={13} />
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={copyId}
+                className="flex items-center gap-2 rounded-lg bg-mist-100 px-3 py-2 font-data text-sm font-medium text-ink-800 hover:bg-mist-200 transition-colors"
+                title="Copy permanent cattle ID"
+              >
+                {cattle.cattleId} <Copy size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={openEditModal}
+                className="flex items-center gap-1.5 rounded-lg border border-pasture-300 bg-pasture-50 px-3 py-2 text-sm font-medium text-pasture-800 shadow-xs hover:bg-pasture-100 hover:border-pasture-400 transition-colors"
+                title="Edit cattle details & update photo"
+              >
+                <Pencil size={14} className="text-pasture-700" />
+                <span>Edit Cow Details</span>
+              </button>
+            </div>
             <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${statusConfig.badgeClass}`}>
               {statusConfig.label}
             </span>
           </div>
 
-          <div className="flex gap-6 text-sm text-ink-600">
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-ink-600">
             <p>
               Gender <span className="ml-1 font-medium capitalize text-ink-800">{cattle.gender?.toLowerCase()}</span>
             </p>
-            {cattle.estimatedAgeYears && (
+            {cattle.estimatedAgeYears !== undefined && cattle.estimatedAgeYears !== null && (
               <p>
                 Age <span className="ml-1 font-medium text-ink-800">{cattle.estimatedAgeYears} yrs</span>
               </p>
@@ -202,6 +349,11 @@ export default function CattleProfile() {
             {cattle.color && (
               <p>
                 Color <span className="ml-1 font-medium text-ink-800">{cattle.color}</span>
+              </p>
+            )}
+            {cattle.identifyingMarks && (
+              <p>
+                Marks <span className="ml-1 font-medium text-ink-800">{cattle.identifyingMarks}</span>
               </p>
             )}
           </div>
@@ -247,6 +399,55 @@ export default function CattleProfile() {
               <p className="font-display text-lg font-semibold text-amber-alert-700">{activeCases?.length || 0}</p>
               <p className="text-xs text-ink-500">Active Cases</p>
             </div>
+          </div>
+
+          {/* Cattle attributes card */}
+          <div className="rounded-xl border border-mist-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between border-b border-mist-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Tag size={16} className="text-pasture-600" />
+                <h2 className="text-sm font-semibold text-ink-900">Cow Profile & Identification</h2>
+              </div>
+              <button
+                type="button"
+                onClick={openEditModal}
+                className="flex items-center gap-1 text-xs font-semibold text-pasture-700 hover:text-pasture-800 hover:underline"
+              >
+                <Pencil size={12} />
+                <span>Edit Details</span>
+              </button>
+            </div>
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="rounded-lg bg-mist-50/70 p-2.5">
+                <p className="text-ink-400 text-[10px] uppercase font-medium">Breed</p>
+                <p className="font-semibold text-ink-800 mt-0.5">{cattle.breed || 'Not recorded'}</p>
+              </div>
+              <div className="rounded-lg bg-mist-50/70 p-2.5">
+                <p className="text-ink-400 text-[10px] uppercase font-medium">Gender</p>
+                <p className="font-semibold text-ink-800 capitalize mt-0.5">{cattle.gender?.toLowerCase()}</p>
+              </div>
+              <div className="rounded-lg bg-mist-50/70 p-2.5">
+                <p className="text-ink-400 text-[10px] uppercase font-medium">Age / DOB</p>
+                <p className="font-semibold text-ink-800 mt-0.5">
+                  {cattle.estimatedAgeYears ? `${cattle.estimatedAgeYears} yrs` : ''}
+                  {cattle.dateOfBirth
+                    ? ` (${new Date(cattle.dateOfBirth).toLocaleDateString()})`
+                    : !cattle.estimatedAgeYears
+                    ? 'Not recorded'
+                    : ''}
+                </p>
+              </div>
+              <div className="rounded-lg bg-mist-50/70 p-2.5">
+                <p className="text-ink-400 text-[10px] uppercase font-medium">Color</p>
+                <p className="font-semibold text-ink-800 mt-0.5">{cattle.color || 'Not recorded'}</p>
+              </div>
+            </div>
+            {cattle.identifyingMarks && (
+              <div className="mt-3 rounded-lg bg-mist-50/70 p-2.5 text-xs">
+                <p className="text-ink-400 text-[10px] uppercase font-medium">Identifying Marks / Features</p>
+                <p className="text-ink-700 mt-0.5">{cattle.identifyingMarks}</p>
+              </div>
+            )}
           </div>
 
           {/* Transfer ownership */}
@@ -385,20 +586,57 @@ export default function CattleProfile() {
 
       {activeTab === 'qr' && (
         <section className="flex flex-col items-center gap-4">
-          <h2 className="text-base font-semibold text-ink-900">QR Code</h2>
+          <h2 className="text-base font-semibold text-ink-900">Official CowCare QR Code</h2>
           {cattle.qrCodeDataUrl ? (
             <>
-              <div className="rounded-2xl border border-mist-200 bg-white p-6 shadow-sm">
-                <img src={cattle.qrCodeDataUrl} alt="Cattle QR" className="h-48 w-48" />
+              <div className="rounded-2xl border border-mist-200 bg-white p-6 shadow-sm flex flex-col items-center">
+                <img src={cattle.qrCodeDataUrl} alt="Cattle QR" className="h-52 w-52" />
+                <p className="mt-3 font-mono text-sm font-bold text-ink-800">{cattle.cattleId}</p>
               </div>
-              <p className="font-data text-sm font-medium text-ink-700">{cattle.cattleId}</p>
-              <p className="max-w-sm text-center text-xs text-ink-400">
-                Scan resolves to this ID only — never raw medical data. Authorized veterinarians can
-                then look up the cattle&apos;s full health profile through the app.
+
+              <div className="flex flex-wrap items-center justify-center gap-2 max-w-sm">
+                <button
+                  type="button"
+                  onClick={copyPassportUrl}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-mist-300 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-mist-50 shadow-xs transition"
+                >
+                  <Copy size={14} /> Copy Passport Link
+                </button>
+                <Link
+                  to={`/qr/cattle/${cattle.cattleId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-mist-300 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-mist-50 shadow-xs transition"
+                >
+                  <ExternalLink size={14} /> Test Open Link
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleRegenerateQr}
+                  disabled={isRegeneratingQr}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-pasture-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-pasture-800 shadow-xs transition disabled:opacity-50"
+                >
+                  <RefreshCw size={14} className={isRegeneratingQr ? 'animate-spin' : ''} />
+                  {isRegeneratingQr ? 'Regenerating...' : 'Regenerate QR'}
+                </button>
+              </div>
+
+              <p className="max-w-md text-center text-xs text-ink-500 mt-2">
+                This QR code encodes an authorized CowCare digital passport URL. Scanning it opens this cow&apos;s verified identity and access-controlled medical record.
               </p>
             </>
           ) : (
-            <EmptyState text="QR code not available." />
+            <div className="text-center space-y-3">
+              <EmptyState text="QR code not available." />
+              <button
+                type="button"
+                onClick={handleRegenerateQr}
+                disabled={isRegeneratingQr}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-pasture-700 px-4 py-2 text-xs font-semibold text-white hover:bg-pasture-800 shadow-xs transition"
+              >
+                <RefreshCw size={14} className={isRegeneratingQr ? 'animate-spin' : ''} /> Generate QR Code
+              </button>
+            </div>
           )}
         </section>
       )}
@@ -508,16 +746,16 @@ export default function CattleProfile() {
                       formData.append('status', saleStatus);
                     }
 
-                    // Collect existing photos to retain
+                    // Collect existing photos to retain (supports both legacy /uploads and Cloudinary URLs)
                     const retainedExisting = [];
-                    if (!frontFacePhoto && frontFacePreview && frontFacePreview.startsWith('/')) {
+                    if (!frontFacePhoto && frontFacePreview && (frontFacePreview.startsWith('/') || frontFacePreview.startsWith('http'))) {
                       retainedExisting.push(frontFacePreview);
                     }
-                    if (!sidePhoto && sidePreview && sidePreview.startsWith('/')) {
+                    if (!sidePhoto && sidePreview && (sidePreview.startsWith('/') || sidePreview.startsWith('http'))) {
                       retainedExisting.push(sidePreview);
                     }
                     additionalPhotos.forEach((item) => {
-                      if (!item.file && item.preview && item.preview.startsWith('/')) {
+                      if (!item.file && item.preview && (item.preview.startsWith('/') || item.preview.startsWith('http'))) {
                         retainedExisting.push(item.preview);
                       }
                     });
@@ -598,7 +836,7 @@ export default function CattleProfile() {
                         {frontFacePreview ? (
                           <>
                             <img
-                              src={frontFacePreview}
+                              src={resolveImageUrl(frontFacePreview)}
                               alt="Front Face View"
                               className="w-full h-full object-cover rounded-lg"
                             />
@@ -679,7 +917,7 @@ export default function CattleProfile() {
                         {sidePreview ? (
                           <>
                             <img
-                              src={sidePreview}
+                              src={resolveImageUrl(sidePreview)}
                               alt="Side Profile View"
                               className="w-full h-full object-cover rounded-lg"
                             />
@@ -762,7 +1000,7 @@ export default function CattleProfile() {
                         </div>
                         <div className="relative aspect-4/3 rounded-xl border border-mist-200 bg-white overflow-hidden">
                           <img
-                            src={item.preview}
+                            src={resolveImageUrl(item.preview)}
                             alt={`Optional Photo ${idx + 1}`}
                             className="w-full h-full object-cover"
                           />
@@ -900,6 +1138,245 @@ export default function CattleProfile() {
             </div>
           </div>
         </section>
+      )}
+
+      {/* Edit Cattle Profile Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/60 p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="relative my-8 w-full max-w-lg rounded-2xl border border-mist-200 bg-white shadow-2xl overflow-hidden animate-fadeIn">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-mist-200 bg-pasture-50/70 px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pasture-600 text-white shadow-xs">
+                  <Pencil size={18} />
+                </div>
+                <div>
+                  <h2 className="font-display text-lg font-bold text-ink-900">
+                    Edit Cow Profile
+                  </h2>
+                  <p className="font-data text-xs text-ink-500">ID: {cattle.cattleId}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                disabled={isEditing}
+                className="rounded-lg p-1.5 text-ink-400 hover:bg-mist-100 hover:text-ink-600 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleEditSubmit} className="space-y-4 p-5 text-sm max-h-[75vh] overflow-y-auto">
+              {/* Photo Upload Box */}
+              <div className="flex flex-col sm:flex-row items-center gap-4 rounded-xl border border-dashed border-pasture-300 bg-pasture-50/40 p-4">
+                <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border-2 border-pasture-400 bg-white shadow-xs">
+                  {editPhotoPreview ? (
+                    <img
+                      src={editPhotoPreview}
+                      alt="Cattle preview"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-3xl">
+                      🐄
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 text-center sm:text-left space-y-1.5">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-pasture-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-pasture-800 transition-colors">
+                    <Camera size={14} />
+                    <span>{editPhotoFile ? 'Change Selected Photo' : 'Upload New Photo'}</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/jpg"
+                      onChange={handleEditPhotoSelect}
+                      className="hidden"
+                    />
+                  </label>
+                  {editPhotoFile ? (
+                    <div className="flex items-center justify-center sm:justify-start gap-2 text-xs">
+                      <span className="font-medium text-pasture-800 truncate max-w-[180px]">
+                        ✓ {editPhotoFile.name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditPhotoFile(null);
+                          setEditPhotoPreview(resolveImageUrl(cattle.photoUrl) || '');
+                        }}
+                        className="text-rose-600 hover:underline font-semibold"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-ink-500">
+                      Upload clear photo. Stored directly to Cloudinary.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Name & Breed */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-ink-800 text-xs mb-1">
+                    Cattle Name <span className="text-vital-600">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    className="input w-full"
+                    placeholder="e.g. Gonku"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-ink-800 text-xs mb-1">
+                    Breed
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.breed}
+                    onChange={(e) => setEditForm({ ...editForm, breed: e.target.value })}
+                    className="input w-full"
+                    placeholder="e.g. Gir, Sahiwal, Jersey"
+                  />
+                </div>
+              </div>
+
+              {/* Gender & Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-ink-800 text-xs mb-1">
+                    Gender <span className="text-vital-600">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {['FEMALE', 'MALE'].map((g) => (
+                      <button
+                        type="button"
+                        key={g}
+                        onClick={() => setEditForm({ ...editForm, gender: g })}
+                        className={`rounded-lg border py-2 text-xs font-medium capitalize transition-colors ${
+                          editForm.gender === g
+                            ? 'border-pasture-600 bg-pasture-50 font-semibold text-pasture-800 ring-1 ring-pasture-600'
+                            : 'border-mist-300 text-ink-600 hover:bg-mist-50'
+                        }`}
+                      >
+                        {g.toLowerCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-medium text-ink-800 text-xs mb-1">
+                    Health Status
+                  </label>
+                  <select
+                    value={editForm.status}
+                    onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                    className="input w-full"
+                  >
+                    <option value="HEALTHY">HEALTHY</option>
+                    <option value="UNDER_OBSERVATION">UNDER OBSERVATION</option>
+                    <option value="RECOVERING">RECOVERING</option>
+                    <option value="CRITICAL">CRITICAL</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Age and Date of Birth */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-ink-800 text-xs mb-1">
+                    Estimated Age (Years)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="40"
+                    step="0.5"
+                    value={editForm.estimatedAgeYears}
+                    onChange={(e) => setEditForm({ ...editForm, estimatedAgeYears: e.target.value })}
+                    className="input w-full"
+                    placeholder="e.g. 2.5"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-ink-800 text-xs mb-1">
+                    Date of Birth
+                  </label>
+                  <input
+                    type="date"
+                    value={editForm.dateOfBirth}
+                    onChange={(e) => setEditForm({ ...editForm, dateOfBirth: e.target.value })}
+                    className="input w-full"
+                  />
+                </div>
+              </div>
+
+              {/* Color & Identifying Marks */}
+              <div>
+                <label className="block font-medium text-ink-800 text-xs mb-1">
+                  Color / Coat Pattern
+                </label>
+                <input
+                  type="text"
+                  value={editForm.color}
+                  onChange={(e) => setEditForm({ ...editForm, color: e.target.value })}
+                  className="input w-full"
+                  placeholder="e.g. Red with white patches"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-ink-800 text-xs mb-1">
+                  Identifying Marks / Physical Features
+                </label>
+                <textarea
+                  rows="2"
+                  value={editForm.identifyingMarks}
+                  onChange={(e) => setEditForm({ ...editForm, identifyingMarks: e.target.value })}
+                  className="input w-full"
+                  placeholder="e.g. Curved horns, black patch on left shoulder, ear tag intact"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-mist-200">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  disabled={isEditing}
+                  className="rounded-lg border border-mist-300 px-4 py-2 text-xs font-medium text-ink-600 hover:bg-mist-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isEditing}
+                  className="btn-pop flex items-center gap-1.5 px-5 py-2 text-xs font-semibold disabled:opacity-60"
+                >
+                  {isEditing ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" />
+                      <span>Saving Changes...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={14} />
+                      <span>Save Changes</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Floating AI Health Assistant (Grounded Mode: Farmer) */}

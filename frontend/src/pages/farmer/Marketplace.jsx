@@ -26,6 +26,7 @@ import { getErrorMessage } from '../../utils/errorMessage';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import AiAssistant from '../../components/common/AiAssistant';
 import { CATTLE_STATUS } from '../../utils/constants';
+import { resolveImageUrl } from '../../utils/imageUrl';
 
 const COMMON_BREEDS = [
   'All Breeds',
@@ -539,7 +540,7 @@ export default function Marketplace() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {cattleList.map((cow) => {
                 const statusCfg = CATTLE_STATUS[cow.status] || CATTLE_STATUS.HEALTHY;
-                const mainPhoto = cow.sale?.photos?.[0] || cow.photos?.[0] || cow.photoUrl;
+                const mainPhoto = resolveImageUrl(cow.sale?.photos?.[0] || cow.photos?.[0] || cow.photoUrl);
                 const photosCount = cow.sale?.photos?.length || cow.photos?.length || (cow.photoUrl ? 1 : 0);
 
                 return (
@@ -685,7 +686,7 @@ export default function Marketplace() {
             <div className="space-y-3">
               {cattleList.map((cow) => {
                 const statusCfg = CATTLE_STATUS[cow.status] || CATTLE_STATUS.HEALTHY;
-                const mainPhoto = cow.sale?.photos?.[0] || cow.photos?.[0] || cow.photoUrl;
+                const mainPhoto = resolveImageUrl(cow.sale?.photos?.[0] || cow.photos?.[0] || cow.photoUrl);
 
                 return (
                   <div

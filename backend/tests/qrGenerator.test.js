@@ -7,17 +7,15 @@ test('generates a valid PNG data URL', async () => {
   assert.match(dataUrl, /^data:image\/png;base64,/);
 });
 
-test('encoded payload contains only the cattle ID, never medical fields', async () => {
-  // The QR encodes a JSON payload; decoding it isn't practical without an
-  // image-decoding library, so instead we verify the generator's contract
-  // by checking it only ever receives/uses the id it was given - this is
-  // a regression guard against someone later "helpfully" adding more
-  // fields to the QR payload (which the product spec explicitly forbids).
+test('encoded payload contains only the cattle ID URL, never medical fields', async () => {
+  // The QR encodes an authorized CowCare web URL containing only the cattleId.
+  // We verify that the generator's source creates a URL with only the cattleId
+  // and never includes private medical fields or diagnosis.
   const generatorSource = require('fs').readFileSync(
     require.resolve('../utils/qrGenerator'),
     'utf8'
   );
-  assert.match(generatorSource, /type:\s*'COWCARE_CATTLE',\s*cattleId/);
+  assert.match(generatorSource, /\/qr\/cattle\/\$\{encodeURIComponent\(cattleId\)\}/);
   assert.doesNotMatch(generatorSource, /medicalEvent|diagnosis|treatment/i);
 });
 

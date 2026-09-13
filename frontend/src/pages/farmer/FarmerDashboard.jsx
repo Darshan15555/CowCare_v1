@@ -23,6 +23,7 @@ import RemindersSection from '../../components/common/RemindersSection';
 import { useCountUp } from '../../hooks/useCountUp';
 import { useAuth } from '../../context/AuthContext';
 import { CATTLE_STATUS } from '../../utils/constants';
+import { resolveImageUrl } from '../../utils/imageUrl';
 
 const STATUS_ICONS = {
   HEALTHY: Heart,
@@ -257,8 +258,8 @@ export default function FarmerDashboard() {
                 className="rounded-xl border border-mist-200 bg-white p-3 hover-lift shadow-sm"
               >
                 <div className="mb-2 flex h-20 items-center justify-center overflow-hidden rounded-lg bg-pasture-50">
-                  {c.photoUrl ? (
-                    <img src={c.photoUrl} alt={c.name} className="h-full w-full object-cover" />
+                  {resolveImageUrl(c.photoUrl) ? (
+                    <img src={resolveImageUrl(c.photoUrl)} alt={c.name} className="h-full w-full object-cover" />
                   ) : (
                     <span className="text-3xl">🐄</span>
                   )}

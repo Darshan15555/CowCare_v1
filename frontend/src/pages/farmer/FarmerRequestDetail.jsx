@@ -9,6 +9,7 @@ import PriorityBadge from '../../components/common/PriorityBadge';
 import StatusBadge from '../../components/common/StatusBadge';
 import StarRating from '../../components/common/StarRating';
 import { STATUS_FLOW, STATUS } from '../../utils/constants';
+import { resolveImageUrl } from '../../utils/imageUrl';
 
 export default function FarmerRequestDetail() {
   const { id } = useParams();
@@ -134,13 +135,13 @@ export default function FarmerRequestDetail() {
         {request.voiceNoteUrl && (
           <div className="mt-3 flex items-center gap-2 rounded-lg bg-serum-50 p-2.5">
             <span className="text-base">🎙️</span>
-            <audio controls src={request.voiceNoteUrl} className="h-9 flex-1" />
+            <audio controls src={resolveImageUrl(request.voiceNoteUrl)} className="h-9 flex-1" />
           </div>
         )}
         {request.attachments?.length > 0 && (
           <div className="mt-3 flex gap-2 overflow-x-auto">
             {request.attachments.map((url) => (
-              <img key={url} src={url} alt="attachment" className="h-20 w-20 rounded-lg object-cover" />
+              <img key={url} src={resolveImageUrl(url)} alt="attachment" className="h-20 w-20 rounded-lg object-cover" />
             ))}
           </div>
         )}

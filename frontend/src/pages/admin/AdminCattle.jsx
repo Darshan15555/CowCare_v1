@@ -3,6 +3,7 @@ import { Search } from 'lucide-react';
 import { adminApi } from '../../api/adminApi';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { CATTLE_STATUS } from '../../utils/constants';
+import { resolveImageUrl } from '../../utils/imageUrl';
 
 const STATUS_FILTERS = ['ALL', 'HEALTHY', 'UNDER_OBSERVATION', 'CRITICAL', 'RECOVERING'];
 
@@ -86,8 +87,8 @@ export default function AdminCattle() {
               >
                 <div className="flex items-center gap-3">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-pasture-50">
-                    {c.photoUrl ? (
-                      <img src={c.photoUrl} alt={c.name} className="h-full w-full object-cover" />
+                    {resolveImageUrl(c.photoUrl) ? (
+                      <img src={resolveImageUrl(c.photoUrl)} alt={c.name} className="h-full w-full object-cover" />
                     ) : (
                       <span className="text-xl">🐄</span>
                     )}

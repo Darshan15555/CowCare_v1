@@ -20,6 +20,7 @@ const UnauthorizedPage = lazy(() =>
 );
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const ProfileSettings = lazy(() => import('./pages/ProfileSettings'));
+const CattleQrAccess = lazy(() => import('./pages/CattleQrAccess'));
 
 const FarmerDashboard = lazy(() => import('./pages/farmer/FarmerDashboard'));
 const MyCattle = lazy(() => import('./pages/farmer/MyCattle'));
@@ -68,6 +69,7 @@ export default function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/unauthorized" element={<UnauthorizedPage />} />
+              <Route path="/qr/cattle/:cattleId" element={<CattleQrAccess />} />
 
               {/* FARMER */}
               <Route element={<ProtectedRoute allowedRoles={['FARMER']} />}>

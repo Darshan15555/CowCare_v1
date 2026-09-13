@@ -16,4 +16,5 @@ export const cattleApi = {
   getMyTransfers: () => axiosClient.get('/cattle/transfers'),
   respondToTransfer: (transferId, action) =>
     axiosClient.patch(`/cattle/transfers/${transferId}`, { action }),
+  regenerateQr: (id) => axiosClient.post(`/cattle/${id}/regenerate-qr`),
 };

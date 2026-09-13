@@ -6,6 +6,7 @@ import { getErrorMessage } from '../../utils/errorMessage';
 import { cattleApi } from '../../api/cattleApi';
 import { SkeletonGrid } from '../../components/common/Skeleton';
 import { CATTLE_STATUS } from '../../utils/constants';
+import { resolveImageUrl } from '../../utils/imageUrl';
 
 export default function MyCattle() {
   const [cattle, setCattle] = useState([]);
@@ -70,8 +71,8 @@ export default function MyCattle() {
                 className="overflow-hidden rounded-xl border border-mist-200 bg-white hover-lift shadow-sm"
               >
                 <div className="flex h-28 items-center justify-center bg-pasture-50">
-                  {c.photoUrl ? (
-                    <img src={c.photoUrl} alt={c.name} className="h-full w-full object-cover" />
+                  {resolveImageUrl(c.photoUrl) ? (
+                    <img src={resolveImageUrl(c.photoUrl)} alt={c.name} className="h-full w-full object-cover" />
                   ) : (
                     <span className="text-4xl">🐄</span>
                   )}

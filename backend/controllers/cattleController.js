@@ -4,6 +4,7 @@ const MedicalEvent = require('../models/MedicalEvent');
 const VetRequest = require('../models/VetRequest');
 const { generateCattleId } = require('../utils/idGenerators');
 const { generateCattleQr } = require('../utils/qrGenerator');
+const { uploadToCloudinary } = require('../services/cloudinaryService');
 
 // @route POST /api/cattle
 // @access Private (FARMER)
@@ -19,7 +20,17 @@ const addCattle = asyncHandler(async (req, res) => {
   const cattleId = await generateCattleId(stateCode);
   const qrCodeDataUrl = await generateCattleQr(cattleId);
 
-  const photoUrl = req.file ? `/uploads/${req.file.filename}` : null;
+  // Upload photo to Cloudinary if provided
+  let photoUrl = null;
+  if (req.file) {
+    try {
+      const result = await uploadToCloudinary(req.file.buffer, { folder: 'cowcare/cattle' });
+      photoUrl = result.secure_url;
+    } catch (err) {
+      res.status(500);
+      throw new Error(`Image upload failed: ${err.message}`);
+    }
+  }
 
   const cattle = await Cattle.create({
     cattleId,
@@ -88,9 +99,11 @@ const scanCattleQr = asyncHandler(async (req, res) => {
     throw new Error('No cattle found for this QR code.');
   }
 
-  if (!['VETERINARIAN', 'ADMIN'].includes(req.user.role)) {
+  const isOwner = String(cattle.ownerId?._id || cattle.ownerId) === String(req.user._id);
+
+  if (!['VETERINARIAN', 'ADMIN'].includes(req.user.role) && !isOwner) {
     res.status(403);
-    throw new Error('Only veterinarians can access cattle records via QR scan.');
+    throw new Error('Only veterinarians and the cattle owner can access cattle records via QR scan.');
   }
 
   const timeline = await MedicalEvent.find({ cattleId: cattle._id })
@@ -117,21 +130,59 @@ const updateCattle = asyncHandler(async (req, res) => {
   const editableFields = [
     'name',
     'breed',
+    'gender',
     'color',
     'identifyingMarks',
     'status',
     'estimatedAgeYears',
+    'dateOfBirth',
   ];
   editableFields.forEach((field) => {
-    if (req.body[field] !== undefined) cattle[field] = req.body[field];
+    if (req.body[field] !== undefined) {
+      if (req.body[field] === '' && (field === 'estimatedAgeYears' || field === 'dateOfBirth')) {
+        cattle[field] = undefined;
+      } else {
+        cattle[field] = req.body[field];
+      }
+    }
   });
 
   if (req.file) {
-    cattle.photoUrl = `/uploads/${req.file.filename}`;
+    try {
+      const result = await uploadToCloudinary(req.file.buffer, { folder: 'cowcare/cattle' });
+      cattle.photoUrl = result.secure_url;
+      if (!cattle.photos) cattle.photos = [];
+      cattle.photos.unshift(result.secure_url);
+    } catch (err) {
+      res.status(500);
+      throw new Error(`Image upload failed: ${err.message}`);
+    }
   }
 
   await cattle.save();
+  await cattle.populate('ownerId', 'name phone role');
   res.json({ success: true, cattle });
+});
+
+// @route POST /api/cattle/:id/regenerate-qr
+// @access Private (owner FARMER, ADMIN)
+const regenerateQr = asyncHandler(async (req, res) => {
+  const cattle = await Cattle.findById(req.params.id);
+  if (!cattle) {
+    res.status(404);
+    throw new Error('Cattle not found.');
+  }
+
+  if (String(cattle.ownerId) !== String(req.user._id) && req.user.role !== 'ADMIN') {
+    res.status(403);
+    throw new Error('You do not have permission to regenerate this QR code.');
+  }
+
+  const qrCodeDataUrl = await generateCattleQr(cattle.cattleId);
+  cattle.qrCodeDataUrl = qrCodeDataUrl;
+  await cattle.save();
+
+  res.json({ success: true, qrCodeDataUrl, cattleId: cattle.cattleId });
 });
 
 /**
@@ -176,4 +227,4 @@ async function authorizeCattleAccess(user, cattle) {
   throw err;
 }
 
-module.exports = { addCattle, getMyCattle, getCattleProfile, scanCattleQr, updateCattle };
+module.exports = { addCattle, getMyCattle, getCattleProfile, scanCattleQr, updateCattle, regenerateQr };

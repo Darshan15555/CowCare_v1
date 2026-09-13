@@ -5,6 +5,7 @@ const MedicalEvent = require('../models/MedicalEvent');
 const User = require('../models/User');
 const { canTransitionSale } = require('../utils/saleStateMachine');
 const { notifyUser } = require('./requestController');
+const { uploadToCloudinary } = require('../services/cloudinaryService');
 
 // @route POST /api/cattle/:id/sale
 // @route POST /api/cattle/:id/sale
@@ -30,8 +31,13 @@ const listCowForSale = asyncHandler(async (req, res) => {
     throw new Error(`Cannot list cow for sale from current status "${currentStatus}".`);
   }
 
-  // Process uploaded photos
-  const uploadedUrls = (req.files || []).map((f) => `/uploads/${f.filename}`);
+  // Upload new photos to Cloudinary
+  const uploadedUrls = await Promise.all(
+    (req.files || []).map(async (f) => {
+      const result = await uploadToCloudinary(f.buffer, { folder: 'cowcare/marketplace' });
+      return result.secure_url;
+    })
+  );
   let existingUrls = [];
   if (req.body.existingPhotos) {
     try {
@@ -106,8 +112,13 @@ const updateSaleListing = asyncHandler(async (req, res) => {
     throw new Error('This cow is not currently listed for sale.');
   }
 
-  // Process photos if files are attached or existingPhotos specified
-  const uploadedUrls = (req.files || []).map((f) => `/uploads/${f.filename}`);
+  // Upload new photos to Cloudinary
+  const uploadedUrls = await Promise.all(
+    (req.files || []).map(async (f) => {
+      const result = await uploadToCloudinary(f.buffer, { folder: 'cowcare/marketplace' });
+      return result.secure_url;
+    })
+  );
   let currentPhotos = cattle.sale?.photos || [];
   if (req.body.existingPhotos !== undefined) {
     try {

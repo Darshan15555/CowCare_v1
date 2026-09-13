@@ -6,6 +6,7 @@ const {
   getCattleProfile,
   scanCattleQr,
   updateCattle,
+  regenerateQr,
 } = require('../controllers/cattleController');
 const {
   initiateTransfer,
@@ -35,7 +36,7 @@ router.use(protect);
 
 router.post('/', restrictTo('FARMER'), upload.single('photo'), addCattleValidators, validate, addCattle);
 router.get('/mine', restrictTo('FARMER'), getMyCattle);
-router.get('/scan/:cattleId', restrictTo('VETERINARIAN', 'ADMIN'), scanCattleQr);
+router.get('/scan/:cattleId', restrictTo('FARMER', 'VETERINARIAN', 'ADMIN'), scanCattleQr);
 
 // Transfer routes — /transfers must be registered before the generic /:id
 // route below, or Express would match "transfers" as an :id value.
@@ -50,6 +51,7 @@ router.patch(
 );
 
 router.get('/:id', getCattleProfile);
+router.post('/:id/regenerate-qr', restrictTo('FARMER', 'ADMIN'), regenerateQr);
 
 // Cattle Marketplace / Open for sale endpoints
 router.post(

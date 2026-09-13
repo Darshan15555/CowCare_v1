@@ -11,6 +11,7 @@ const {
 const { isVetOnDutyNow } = require('../utils/vetAvailability');
 const { getIO } = require('../sockets/io');
 const { DIRECT_REQUEST_FALLBACK_MINUTES } = require('../utils/directRequestFallback');
+const { uploadToCloudinary } = require('../services/cloudinaryService');
 
 const PRIORITY_LABELS = {
   EMERGENCY: '🔴 EMERGENCY',
@@ -88,8 +89,30 @@ const createRequest = asyncHandler(async (req, res) => {
   const photoFiles = req.files?.photos || [];
   const voiceNoteFile = req.files?.voiceNote?.[0] || null;
 
-  const attachments = photoFiles.map((f) => `/uploads/${f.filename}`);
-  const voiceNoteUrl = voiceNoteFile ? `/uploads/${voiceNoteFile.filename}` : null;
+  // Upload photos to Cloudinary
+  const attachments = await Promise.all(
+    photoFiles.map(async (f) => {
+      const result = await uploadToCloudinary(f.buffer, { folder: 'cowcare/requests' });
+      return result.secure_url;
+    })
+  );
+
+  // Upload voice note to Cloudinary (as raw file, not image)
+  let voiceNoteUrl = null;
+  if (voiceNoteFile) {
+    try {
+      voiceNoteUrl = await new Promise((resolve, reject) => {
+        const { v2: cloudinary } = require('cloudinary');
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: 'cowcare/voicenotes', resource_type: 'auto' },
+          (err, result) => err ? reject(err) : resolve(result.secure_url)
+        );
+        stream.end(voiceNoteFile.buffer);
+      });
+    } catch (err) {
+      console.warn('[Cloudinary] Voice note upload failed (non-critical):', err.message);
+    }
+  }
 
   const parsedLocation = typeof location === 'string' ? JSON.parse(location) : location;
 

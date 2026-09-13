@@ -25,10 +25,12 @@ export function SocketProvider({ children }) {
     const token = getAccessToken();
     if (!token) return;
 
-    const socket = io('/', {
+    const socketServerUrl = import.meta.env.VITE_BACKEND_URL || '/';
+    const socket = io(socketServerUrl, {
       path: '/socket.io',
       auth: { token },
       withCredentials: true,
+      transports: ['websocket', 'polling'],
       // A backend restart briefly resets the proxied WebSocket. Keep retrying
       // with a bounded backoff instead of leaving the notification layer dead.
       reconnection: true,

@@ -11,7 +11,7 @@ const {
   initiateTransferValidators,
   respondToTransferValidators,
 } = require('../validators/cattleTransferValidators');
-const { addCattleValidators } = require('../validators/cattleValidators');
+const { addCattleValidators, updateCattleValidators } = require('../validators/cattleValidators');
 const { vetIdValidators, vetDirectoryValidators } = require('../validators/vetValidators');
 
 /**
@@ -98,6 +98,27 @@ test('cattle creation accepts a valid payload', async () => {
     name: 'Lakshmi',
     gender: 'FEMALE',
     breed: 'Gir',
+  });
+  assert.equal(isValid, true);
+});
+
+test('cattle update rejects an invalid gender value', async () => {
+  const { isValid, errors } = await runValidators(updateCattleValidators, {
+    gender: 'OTHER',
+  });
+  assert.equal(isValid, false);
+  assert.ok(errors.some((e) => e.path === 'gender'));
+});
+
+test('cattle update accepts a full edit payload', async () => {
+  const { isValid } = await runValidators(updateCattleValidators, {
+    name: 'Gonku',
+    breed: 'Gir',
+    gender: 'FEMALE',
+    status: 'HEALTHY',
+    estimatedAgeYears: 2.5,
+    color: 'Red with white patches',
+    identifyingMarks: 'Curved horns',
   });
   assert.equal(isValid, true);
 });
