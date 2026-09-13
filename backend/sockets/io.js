@@ -4,9 +4,24 @@ const jwt = require('jsonwebtoken');
 let ioInstance = null;
 
 function initSocket(httpServer) {
+  const clientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace(/\/+$/, '') : null;
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'https://cow-care-v1.vercel.app',
+    clientUrl,
+  ].filter(Boolean);
+
   ioInstance = new Server(httpServer, {
     cors: {
-      origin: process.env.CLIENT_URL || 'http://localhost:5173',
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        const cleanOrigin = origin.replace(/\/+$/, '');
+        if (allowedOrigins.includes(cleanOrigin) || cleanOrigin.endsWith('.vercel.app')) {
+          return callback(null, true);
+        }
+        return callback(new Error(`CORS origin not allowed: ${origin}`));
+      },
       credentials: true,
     },
     // Detect broken proxy/client connections promptly; the browser client

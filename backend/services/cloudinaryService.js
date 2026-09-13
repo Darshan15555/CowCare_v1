@@ -3,9 +3,9 @@ const { v2: cloudinary } = require('cloudinary');
 // Configure Cloudinary from environment variables.
 // These must be set on Render (production) and optionally in .env (local dev).
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: (process.env.CLOUDINARY_CLOUD_NAME || '').trim(),
+  api_key: (process.env.CLOUDINARY_API_KEY || '').trim(),
+  api_secret: (process.env.CLOUDINARY_API_SECRET || '').trim(),
 });
 
 /**

@@ -15,6 +15,9 @@ export function resolveImageUrl(url) {
   // Already a full URL (Cloudinary or any CDN)
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
   // Legacy /uploads/... path — resolve via backend origin
-  const backendOrigin = import.meta.env.VITE_BACKEND_URL || '';
+  const backendOrigin =
+    import.meta.env.VITE_BACKEND_URL ||
+    (import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace(/\/api\/?$/, '') : '') ||
+    '';
   return backendOrigin ? `${backendOrigin}${url}` : url;
 }

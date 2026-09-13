@@ -29,11 +29,33 @@ const vetRoutes = require('./routes/vetRoutes');
 const app = express();
 const httpServer = http.createServer(app);
 
+// --- Reverse proxy configuration ---
+// Render sits behind a reverse proxy that sets X-Forwarded-For and X-Forwarded-Proto.
+// Setting trust proxy to 1 informs Express to trust the first proxy hop, allowing
+// express-rate-limit to extract the real client IP without throwing ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
+app.set('trust proxy', 1);
+
 // --- Security & parsing middleware ---
 app.use(helmet({ crossOriginResourcePolicy: false }));
+
+const clientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace(/\/+$/, '') : null;
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://cow-care-v1.vercel.app',
+  clientUrl,
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const cleanOrigin = origin.replace(/\/+$/, '');
+      if (allowedOrigins.includes(cleanOrigin) || cleanOrigin.endsWith('.vercel.app')) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS origin not allowed: ${origin}`));
+    },
     credentials: true,
   })
 );
@@ -78,6 +100,8 @@ app.use('/api/medical', (req, res, next) => (req.method === 'POST' ? writeLimite
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // --- Routes ---
+// Root & health endpoints for Render health checks and uptime monitors
+app.get('/', (req, res) => res.json({ success: true, message: 'CowCare API is running.' }));
 app.get('/api/health', (req, res) => res.json({ success: true, message: 'CowCare API is running.' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/cattle', cattleRoutes);

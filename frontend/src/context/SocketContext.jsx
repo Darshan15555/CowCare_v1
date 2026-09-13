@@ -25,7 +25,10 @@ export function SocketProvider({ children }) {
     const token = getAccessToken();
     if (!token) return;
 
-    const socketServerUrl = import.meta.env.VITE_BACKEND_URL || '/';
+    const socketServerUrl =
+      import.meta.env.VITE_BACKEND_URL ||
+      (import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace(/\/api\/?$/, '') : '') ||
+      '/';
     const socket = io(socketServerUrl, {
       path: '/socket.io',
       auth: { token },
